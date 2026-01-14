@@ -1,10 +1,19 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime
-from Services.AeroportoService import AnalisarArquivoAeroportos, ProcessarAeroportosFinal, ListarRemessasAeroportos, ExcluirRemessaAeroporto
+from Services.AeroportoService import AnalisarArquivoAeroportos, ProcessarAeroportosFinal, ListarRemessasAeroportos, ExcluirRemessaAeroporto, ListarTodosParaSelect
 
 AeroportoBp = Blueprint('Aeroporto', __name__)
 
+@AeroportoBp.route('/aeroportos/api/listar_simples')
+@login_required
+def ApiListarSimples():
+    try:
+        Dados = ListarTodosParaSelect()
+        return jsonify(Dados)
+    except Exception as e:
+        return jsonify([]), 500
+    
 @AeroportoBp.route('/aeroportos/gerenciar', methods=['GET', 'POST'])
 @login_required
 def Gerenciar():

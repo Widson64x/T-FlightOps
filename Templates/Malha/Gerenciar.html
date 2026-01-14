@@ -4,218 +4,465 @@
 
 {% block conteudo %}
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <style>
-    /* Layout da Página: Grid de 2 Colunas */
+    /* --- LAYOUT E GRID --- */
     .page-grid {
         display: grid;
-        grid-template-columns: 320px 1fr; /* Coluna Fixa + Flexível */
-        gap: 24px;
-        /* Ocupa a altura disponível menos o cabeçalho da página (Título) */
-        height: calc(100vh - 140px); 
+        grid-template-columns: 350px 1fr; /* Sidebar Fixa + Conteúdo Flexível */
+        gap: 25px;
+        height: calc(100vh - 145px); 
         min-height: 500px;
+        transition: all 0.3s ease;
     }
+    @media (max-width: 1100px) { .page-grid { grid-template-columns: 1fr; height: auto; } }
 
-    @media (max-width: 1000px) {
-        .page-grid { grid-template-columns: 1fr; height: auto; }
-    }
-
-    /* Cards Estilizados */
+    /* --- CARDS / PAINÉIS --- */
     .painel {
-        background: var(--cor-fundo-painel);
-        border: 1px solid var(--cor-borda);
-        border-radius: 8px;
-        margin-bottom: 30px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden; /* Importante para os filhos não vazarem */
+        background: var(--cor-fundo-painel); border: 1px solid var(--cor-borda);
+        border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        display: flex; flex-direction: column; overflow: hidden;
     }
-
     .painel-header {
-        padding: 15px 20px;
-        border-bottom: 1px solid var(--cor-borda);
-        background: rgba(0,0,0,0.01);
-        font-weight: 600;
-        color: var(--cor-texto-principal);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        padding: 18px 25px; border-bottom: 1px solid var(--cor-borda);
+        background: var(--cor-fundo-principal); font-weight: 600; color: var(--cor-texto-principal);
     }
+    .painel-body { padding: 25px; flex: 1; overflow-y: auto; }
+    .painel-tabela .painel-body { padding: 0; }
 
-    .painel-body {
-        padding: 20px;
-        flex: 1; /* Faz o corpo crescer */
-        overflow-y: auto; /* Scroll apenas se necessário dentro do card */
-    }
-
-    /* Painel de Tabela Específico (sem padding para colar a tabela nas bordas) */
-    .painel-tabela .painel-body {
-        padding: 0; 
-    }
-
-    /* Área de Upload */
+    /* --- UPLOAD AREA --- */
     .upload-zone {
-        border: 2px dashed var(--cor-borda);
-        border-radius: 6px;
-        padding: 30px 20px;
-        text-align: center;
-        transition: all 0.2s;
-        cursor: pointer;
-        background: var(--cor-fundo-principal);
+        border: 2px dashed var(--cor-borda); border-radius: 8px; padding: 40px 20px;
+        text-align: center; cursor: pointer; background: rgba(0,0,0,0.01); transition: 0.2s;
     }
-    .upload-zone:hover {
-        border-color: var(--cor-primaria);
-        background: rgba(0, 86, 179, 0.03);
+    .upload-zone:hover { border-color: var(--cor-primaria); background: rgba(0, 86, 179, 0.04); transform: translateY(-2px); }
+    .upload-hint {
+        margin-top: 15px; font-size: 0.8rem; color: var(--cor-texto-secundario); 
+        background: var(--cor-fundo-principal); padding: 12px; border-radius: 6px;
+        border: 1px solid var(--cor-borda); line-height: 1.5;
     }
-    
-    /* Tabela Profissional */
+
+    /* --- TABELA --- */
     .table-custom { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     .table-custom th {
-        background: var(--cor-fundo-principal);
-        color: var(--cor-texto-secundario);
-        font-weight: 600;
-        text-align: left;
-        padding: 12px 20px;
-        position: sticky;
-        top: 0;
-        border-bottom: 1px solid var(--cor-borda);
-        z-index: 5;
+        background: #f8f9fa; color: var(--cor-texto-secundario); font-weight: 600; text-align: left;
+        padding: 14px 20px; position: sticky; top: 0; z-index: 5; border-bottom: 1px solid var(--cor-borda);
     }
-    .table-custom td { padding: 12px 20px; border-bottom: 1px solid var(--cor-borda); color: var(--cor-texto-principal); }
-    .table-custom tr:hover { background-color: rgba(0,0,0,0.02); }
+    .table-custom td { padding: 14px 20px; border-bottom: 1px solid var(--cor-borda); color: var(--cor-texto-principal); }
+    .table-custom tr:hover { background-color: rgba(0,0,0,0.015); }
 
-    /* Badges e Tags */
-    .tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
-    .tag-blue { background: #e3f2fd; color: #0d47a1; } /* Importação */
-    .tag-yellow { background: #fff3cd; color: #856404; } /* Substituição */
-    .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-    .dot-green { background-color: #28a745; }
-    .dot-gray { background-color: #6c757d; }
+    /* --- MAPA E TOOLBAR --- */
+    #mapa-container {
+        width: 100%; height: calc(100vh - 145px); display: none; 
+        border-radius: 12px; overflow: hidden; border: 1px solid var(--cor-borda);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+    #mapa-voos { width: 100%; height: 100%; z-index: 1; }
 
-    /* Modal */
+    .toolbar-topo {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+        background: var(--cor-fundo-painel); padding: 10px 15px; border-radius: 10px; 
+        border: 1px solid var(--cor-borda); flex-wrap: wrap; gap: 15px;
+    }
+
+    .toolbar-group { display: flex; gap: 12px; align-items: flex-end; }
+
+    /* Inputs e Labels */
+    .input-wrapper label { font-size: 0.7rem; font-weight: 700; color: var(--cor-texto-secundario); text-transform: uppercase; display: block; margin-bottom: 4px;}
+    .date-input {
+        padding: 8px 12px; border: 1px solid var(--cor-borda); border-radius: 6px;
+        font-family: 'Inter', sans-serif; font-size: 0.9rem; outline: none; height: 38px;
+    }
+    .date-input:focus { border-color: var(--cor-primaria); box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.1); }
+
+    /* Input Localizador Especial */
+    .input-localizador {
+        padding-left: 35px; /* Espaço para o ícone */
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: 10px center;
+        width: 180px; transition: width 0.3s;
+    }
+    .input-localizador:focus { width: 220px; border-color: var(--cor-primaria); }
+
+    .view-switch { display: flex; background: #f1f3f5; padding: 4px; border-radius: 8px; }
+    .view-btn { padding: 6px 14px; border: none; background: transparent; cursor: pointer; font-weight: 600; color: #666; border-radius: 6px; transition: 0.2s; }
+    .view-btn.active { background: white; color: var(--cor-primaria); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+    /* --- POPUP --- */
+    .leaflet-popup-content-wrapper { border-radius: 10px; padding: 0; overflow: hidden; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+    .leaflet-popup-content { margin: 0 !important; width: 280px !important; }
+    .popup-header { padding: 15px; color: white; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+    
+    .header-latam { background: linear-gradient(135deg, #E30613, #b3000b); }
+    .header-azul { background: linear-gradient(135deg, #009FE3, #0077aa); }
+    .header-gol { background: linear-gradient(135deg, #FF7020, #e05e15); }
+    .header-default { background: #495057; }
+    
+    .popup-body { padding: 15px; background: #fff; font-size: 0.9rem; color: #333; }
+    .rota-nomes { font-size: 0.75rem; color: #666; margin-bottom: 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+    .rota-visual { display: flex; justify-content: center; gap: 10px; margin-bottom: 12px; font-size: 1.4rem; font-weight: 800; color: #212529; background: #f8f9fa; padding: 10px; border-radius: 8px; }
+    
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #f1f3f5; }
+    .info-label { color: #868e96; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+    .info-val { font-weight: 600; color: #495057; }
+    
+    .popup-nav { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #f8f9fa; border-top: 1px solid #e9ecef; }
+    .nav-btn { background: white; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; padding: 4px 10px; font-weight: bold; transition: 0.2s; }
+    .nav-btn:hover { background: #e9ecef; }
+    .nav-btn:disabled { opacity: 0.4; cursor: default; }
+    .nav-counter { font-size: 0.75rem; font-weight: 600; color: #adb5bd; }
+
+    /* --- MODAL --- */
     .modal-backdrop {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-        background: rgba(0,0,0,0.5); z-index: 1000;
+        background: rgba(0,0,0,0.5); z-index: 2000;
         display: flex; align-items: center; justify-content: center;
-        backdrop-filter: blur(2px);
+        backdrop-filter: blur(4px);
     }
     .modal-content {
-        background: var(--cor-fundo-painel); width: 400px; padding: 30px;
-        border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center;
+        background: var(--cor-fundo-painel); width: 420px; padding: 35px;
+        border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); text-align: center;
+        border: 1px solid var(--cor-borda);
+        animation: modalUp 0.3s ease-out;
     }
+    @keyframes modalUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 </style>
+
+<datalist id="lista-aeroportos"></datalist>
 
 {% if ExibirModal %}
 <div class="modal-backdrop">
     <div class="modal-content">
-        <div style="font-size: 2.5rem; margin-bottom: 15px;">⚠️</div>
-        <h3 style="color: #dc3545; margin-bottom: 10px;">Substituir Malha?</h3>
-        <p style="color: var(--cor-texto-secundario); margin-bottom: 25px; line-height: 1.5;">
+        <div style="font-size: 3rem; margin-bottom: 15px;">⚠️</div>
+        <h3 style="color: #dc3545; margin-bottom: 10px; font-weight: 700;">Conflito de Versão</h3>
+        <p style="color: var(--cor-texto-principal); margin-bottom: 25px; line-height: 1.6; font-size: 0.95rem;">
             Já existe uma malha ativa para <strong>{{ DadosModal.mes_ref.strftime('%m/%Y') }}</strong>.<br>
-            Deseja arquivar a atual e ativar esta nova?
+            Deseja arquivar a versão atual e ativar esta nova?
         </p>
-        
-        <form method="POST" style="display: flex; gap: 10px; justify-content: center;">
+        <form method="POST" style="display: flex; gap: 15px; justify-content: center;">
             <input type="hidden" name="confirmar_substituicao" value="true">
             <input type="hidden" name="caminho_temp" value="{{ DadosModal.caminho_temp }}">
             <input type="hidden" name="nome_arquivo" value="{{ DadosModal.nome_arquivo }}">
             <input type="hidden" name="mes_ref" value="{{ DadosModal.mes_ref }}">
-            
-            <a href="{{ url_for('Malha.Gerenciar') }}" class="btn-primario" style="background: #6c757d; text-decoration: none;">Cancelar</a>
+            <a href="{{ url_for('Malha.Gerenciar') }}" class="btn-primario" style="background: #e9ecef; color: #495057; text-decoration: none; border: 1px solid #ced4da;">Cancelar</a>
             <button type="submit" class="btn-primario" style="background: #dc3545;">Sim, Substituir</button>
         </form>
     </div>
 </div>
 {% endif %}
 
-<div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: end;">
-    <div>
-        <h2 style="font-weight: 600; color: var(--cor-texto-principal);">Malha Aérea</h2>
-        <p style="color: var(--cor-texto-secundario); font-size: 0.9rem;">Gerencie as importações e versões dos voos.</p>
+<div class="toolbar-topo">
+    <div class="toolbar-group">
+        <h2 style="font-size: 1.5rem; display: flex; align-items: center; gap: 8px;">
+            🛫 Gestão da Malha
+        </h2>
+        
+        <div id="area-localizador" style="display: none; margin-left: 20px; border-left: 1px solid #ddd; padding-left: 20px;">
+            <input type="text" id="input-localizar" class="date-input input-localizador" 
+                   list="lista-aeroportos" placeholder="Localizar Aeroporto..." 
+                   onchange="LocalizarAeroporto(this.value)">
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 20px; align-items: center;">
+        
+        <div class="toolbar-group" id="area-filtros" style="display: none;">
+            <div class="input-wrapper">
+                <label>Início</label>
+                <input type="date" id="data-inicio" class="date-input">
+            </div>
+            <div class="input-wrapper">
+                <label>Fim</label>
+                <input type="date" id="data-fim" class="date-input">
+            </div>
+            
+            <div class="input-wrapper">
+                <label>Origem</label>
+                <input type="text" id="filtro-origem" class="date-input" placeholder="GRU" 
+                       list="lista-aeroportos" style="width: 80px; text-transform: uppercase; text-align: center;">
+            </div>
+            <div class="input-wrapper">
+                <label>Destino</label>
+                <input type="text" id="filtro-destino" class="date-input" placeholder="MIA" 
+                       list="lista-aeroportos" style="width: 80px; text-transform: uppercase; text-align: center;">
+            </div>
+
+            <button class="btn-primario" style="height: 38px; margin-bottom: 1px;" onclick="CarregarMapa()">Buscar</button>
+            <button class="view-btn" style="height: 38px; margin-bottom: 1px; border: 1px solid #ced4da;" onclick="LimparFiltros()">Limpar</button>
+        </div>
+
+        <div class="view-switch">
+            <button class="view-btn active" onclick="AlternarVisao('lista')" id="btn-lista">📋 Lista</button>
+            <button class="view-btn" onclick="AlternarVisao('mapa')" id="btn-mapa">🌍 Mapa</button>
+        </div>
     </div>
 </div>
 
-<div class="page-grid">
-    
+<div class="page-grid" id="lista-container">
     <div class="painel" style="height: fit-content;">
         <div class="painel-header">Nova Importação</div>
         <div class="painel-body">
             <form method="POST" enctype="multipart/form-data">
-                <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; display: block;">Selecionar Planilha (.xlsx)</label>
-                
                 <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
-                    <span style="font-size: 2rem;">📤</span><br>
-                    <span style="font-size: 0.9rem; font-weight: 500;">Clique para Upload</span>
+                    <div style="font-size: 2rem;">📤</div>
+                    <div style="font-size: 0.9rem; font-weight: 600;">Upload Planilha (.xlsx)</div>
                     <input type="file" id="fileInput" name="arquivo_xlsx" accept=".xlsx" style="display: none;" onchange="this.form.submit()">
                 </div>
-
-                <div style="margin-top: 15px; font-size: 0.8rem; color: var(--cor-texto-secundario); background: var(--cor-fundo-principal); padding: 10px; border-radius: 4px;">
-                    <strong>Dica:</strong> O sistema detecta o mês automaticamente pela coluna "DIA" ou "DATA".
-                </div>
+                <div class="upload-hint"><strong>ℹ️ Info:</strong> Competência detectada automaticamente pela data.</div>
             </form>
         </div>
     </div>
-
     <div class="painel painel-tabela">
-        <div class="painel-header">
-            <span>Histórico de Versões</span>
-            <span style="font-size: 0.8rem; font-weight: 400; color: var(--cor-texto-secundario);">Ordenado por data de upload</span>
-        </div>
-        
+        <div class="painel-header">Histórico</div>
         <div class="painel-body">
             <table class="table-custom">
                 <thead>
-                    <tr>
-                        <th>Referência</th>
-                        <th>Tipo</th>
-                        <th>Arquivo</th>
-                        <th>Resp.</th>
-                        <th>Status</th>
-                        <th style="text-align: center;">Ações</th>
-                    </tr>
+                    <tr><th>Ref.</th><th>Tipo</th><th>Arquivo</th><th>Status</th><th style="text-align:center;">Ações</th></tr>
                 </thead>
                 <tbody>
                     {% for remessa in ListaRemessas %}
                     <tr>
-                        <td style="font-weight: 600;">{{ remessa.MesReferencia.strftime('%m/%Y') }}</td>
+                        <td><strong>{{ remessa.MesReferencia.strftime('%m/%Y') }}</strong></td>
+                        <td>{{ remessa.TipoAcao }}</td>
+                        <td>{{ remessa.NomeArquivoOriginal[:25] }}...</td>
                         <td>
-                            {% if remessa.TipoAcao == 'Substituicao' %}
-                                <span class="tag tag-yellow">Substituição</span>
-                            {% else %}
-                                <span class="tag tag-blue">Importação</span>
-                            {% endif %}
+                            {% if remessa.Ativo %} <div class="status-active"><span class="status-dot"></span> Ativo</div>
+                            {% else %} <span style="color: #adb5bd;">Histórico</span> {% endif %}
                         </td>
-                        <td style="font-size: 0.85rem; color: var(--cor-texto-secundario);">{{ remessa.NomeArquivoOriginal }}</td>
-                        <td>
-                            <div style="font-weight: 500;">{{ remessa.UsuarioResponsavel }}</div>
-                            <div style="font-size: 0.75rem; color: #999;">{{ remessa.DataUpload.strftime('%d/%m %H:%M') }}</div>
-                        </td>
-                        <td>
-                            {% if remessa.Ativo %}
-                                <span style="color: #155724; font-weight: 600; font-size: 0.85rem;"><span class="status-dot dot-green"></span>Ativo</span>
-                            {% else %}
-                                <span style="color: #6c757d; font-size: 0.85rem;"><span class="status-dot dot-gray"></span>Histórico</span>
-                            {% endif %}
-                        </td>
-                        <td style="text-align: center;">
-                            <a href="{{ url_for('Malha.Excluir', id_remessa=remessa.Id) }}" 
-                               onclick="return confirm('ATENÇÃO: Isso apagará todos os voos desta versão.\nContinuar?')"
-                               style="text-decoration: none; padding: 5px; border-radius: 4px; transition: 0.2s;"
-                               title="Excluir">
-                               ❌
-                            </a>
-                        </td>
+                        <td style="text-align: center;"><a href="{{ url_for('Malha.Excluir', id_remessa=remessa.Id) }}" onclick="return confirm('Confirma exclusão?')">❌</a></td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="6" style="text-align: center; padding: 50px; color: var(--cor-texto-secundario);">
-                            Nenhuma importação realizada ainda.
-                        </td>
-                    </tr>
+                    <tr><td colspan="5" style="text-align:center; padding: 20px; color:#999;">Vazio</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 </div>
+
+<div id="mapa-container">
+    <div id="mapa-voos"></div>
+</div>
+
+<script>
+    // --- GLOBAIS ---
+    let map, flightLayer, layerAeroportos;
+    let rotasAgrupadas = {}; 
+    let baseAeroportos = []; // Cache do autocomplete
+    let cacheAeroportosData = null; 
+    let lastInicio = null, lastFim = null;
+    
+    // --- INICIALIZAR ---
+    function InicializarMapa() {
+        map = L.map('mapa-voos', { zoomControl: false }).setView([-15.79, -47.88], 4);
+        L.control.zoom({ position: 'topright' }).addTo(map);
+        
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CARTO', maxZoom: 19
+        }).addTo(map);
+
+        layerAeroportos = L.layerGroup().addTo(map);
+        flightLayer = L.layerGroup().addTo(map);
+
+        const hoje = new Date().toISOString().split('T')[0];
+        document.getElementById('data-inicio').value = hoje;
+        document.getElementById('data-fim').value = hoje;
+        
+        CarregarListaAeroportos(); // Busca lista para autocomplete
+        CarregarMapa();
+    }
+
+    // --- API DE AEROPORTOS (AUTOCOMPLETE + LOCALIZADOR) ---
+    async function CarregarListaAeroportos() {
+        try {
+            const resp = await fetch('/aeroportos/api/listar_simples');
+            baseAeroportos = await resp.json();
+            const datalist = document.getElementById('lista-aeroportos');
+            datalist.innerHTML = '';
+            baseAeroportos.forEach(aero => {
+                const option = document.createElement('option');
+                option.value = aero.iata; 
+                option.label = `${aero.nome} (${aero.iata})`;
+                datalist.appendChild(option);
+            });
+        } catch (e) { console.error("Erro lista aeroportos", e); }
+    }
+
+    // --- FUNÇÃO "FLY TO" (LOCALIZAR AEROPORTO) ---
+    function LocalizarAeroporto(iataInput) {
+        if (!iataInput) return;
+        document.getElementById('input-localizar').value = '';
+        document.getElementById('input-localizar').blur();
+
+        const iata = iataInput.toUpperCase().trim();
+        const aero = baseAeroportos.find(a => a.iata === iata);
+
+        if (aero) {
+            map.flyTo([aero.lat, aero.lon], 12, { duration: 1.5 });
+            L.popup().setLatLng([aero.lat, aero.lon])
+                .setContent(`<b>${aero.iata}</b><br>${aero.nome}`).openOn(map);
+        } else {
+            alert('Aeroporto não encontrado.');
+        }
+    }
+
+    // --- CARREGAMENTO DE ROTAS ---
+    async function CarregarMapa() {
+        const inicio = document.getElementById('data-inicio').value;
+        const fim = document.getElementById('data-fim').value;
+        const origem = document.getElementById('filtro-origem').value;
+        const destino = document.getElementById('filtro-destino').value;
+
+        if(!inicio || !fim) return alert("Selecione o período.");
+
+        // Atualiza background (pontinhos) se mudou data
+        if (inicio !== lastInicio || fim !== lastFim || !cacheAeroportosData) {
+            await CarregarAeroportosFundo(inicio, fim);
+            lastInicio = inicio; lastFim = fim;
+        }
+        
+        flightLayer.clearLayers();
+        rotasAgrupadas = {}; 
+
+        try {
+            let url = `/malha/api/rotas?inicio=${inicio}&fim=${fim}`;
+            if(origem) url += `&origem=${origem}`;
+            if(destino) url += `&destino=${destino}`;
+
+            const response = await fetch(url);
+            const dadosBrutos = await response.json();
+
+            if (dadosBrutos.length === 0) { alert("Nenhuma rota encontrada."); return; }
+
+            // Agrupa voos
+            dadosBrutos.forEach(voo => {
+                const chave = `${voo.origem.iata}-${voo.destino.iata}`;
+                if (!rotasAgrupadas[chave]) rotasAgrupadas[chave] = [];
+                rotasAgrupadas[chave].push(voo);
+            });
+
+            // Desenha linhas
+            Object.keys(rotasAgrupadas).forEach(chave => {
+                const grupo = rotasAgrupadas[chave];
+                const vooPrincipal = grupo.find(v => v.cia.includes('GOL')) || grupo[0];
+                const p1 = [vooPrincipal.origem.lat, vooPrincipal.origem.lon];
+                const p2 = [vooPrincipal.destino.lat, vooPrincipal.destino.lon];
+                const estilo = ObterEstiloVoo(vooPrincipal.cia, vooPrincipal.tipo_resultado);
+                
+                let linha;
+                if (estilo.isZebra) {
+                    L.polyline([p1, p2], { color: 'white', weight: estilo.weight+2, opacity: estilo.opacity }).addTo(flightLayer);
+                    linha = L.polyline([p1, p2], { color: estilo.color, weight: estilo.weight, opacity: estilo.opacity, dashArray: estilo.dashArray }).addTo(flightLayer);
+                } else {
+                    linha = L.polyline([p1, p2], { color: estilo.color, weight: estilo.weight, opacity: estilo.opacity }).addTo(flightLayer);
+                }
+
+                linha.bindPopup(GerarHtmlPopup(chave, 0));
+                
+                if (vooPrincipal.tipo_resultado !== 'Geral') {
+                    L.circleMarker(p1, { radius: 5, color: estilo.color, fillColor: '#fff', fillOpacity: 1 }).addTo(flightLayer);
+                    L.circleMarker(p2, { radius: 5, color: estilo.color, fillColor: '#fff', fillOpacity: 1 }).addTo(flightLayer);
+                }
+            });
+
+            if (dadosBrutos.length > 0) {
+                const bounds = L.latLngBounds(dadosBrutos.map(r => [r.origem.lat, r.origem.lon]).concat(dadosBrutos.map(r => [r.destino.lat, r.destino.lon])));
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+        } catch (error) { console.error(error); }
+    }
+
+    // --- POPUP REFINADO ---
+    function GerarHtmlPopup(chaveRota, index) {
+        const grupo = rotasAgrupadas[chaveRota];
+        const voo = grupo[index];
+        const total = grupo.length;
+        const estilo = ObterEstiloVoo(voo.cia, voo.tipo_resultado);
+        const nomeOrigem = voo.origem.nome ? voo.origem.nome.replace('International Airport', '').replace('Airport', '') : '';
+        const nomeDestino = voo.destino.nome ? voo.destino.nome.replace('International Airport', '').replace('Airport', '') : '';
+
+        return `
+            <div id="popup-content-${chaveRota}" style="width: 280px;">
+                <div class="popup-header ${estilo.headerClass}">
+                    <span>${voo.cia}</span> <span>${voo.voo}</span>
+                </div>
+                <div class="popup-body">
+                    <div class="rota-nomes" title="${nomeOrigem} → ${nomeDestino}">${nomeOrigem} ➝ ${nomeDestino}</div>
+                    <div class="rota-visual">${voo.origem.iata} <span style="color:#dee2e6;">➝</span> ${voo.destino.iata}</div>
+                    <div class="info-row"><span class="info-label">Partida</span><span class="info-val">${voo.horario_saida}</span></div>
+                    <div class="info-row"><span class="info-label">Chegada</span><span class="info-val">${voo.horario_chegada}</span></div>
+                    <div class="info-row"><span class="info-label">Data</span><span class="info-val">${voo.data}</span></div>
+                </div>
+                ${total > 1 ? `
+                <div class="popup-nav">
+                    <button type="button" class="nav-btn" ${index===0?'disabled':''} onclick="NavegarPopup(event, '${chaveRota}', ${index-1})">❮</button>
+                    <span class="nav-counter">${index+1}/${total}</span>
+                    <button type="button" class="nav-btn" ${index===(total-1)?'disabled':''} onclick="NavegarPopup(event, '${chaveRota}', ${index+1})">❯</button>
+                </div>` : ''}
+            </div>
+        `;
+    }
+
+    window.NavegarPopup = function(event, chaveRota, novoIndex) {
+        if (event) { event.stopPropagation(); event.preventDefault(); }
+        const novoHtml = GerarHtmlPopup(chaveRota, novoIndex);
+        if (map._popup) map._popup.setContent(novoHtml);
+    };
+
+    // --- HELPERS E BACKGROUND ---
+    function ObterEstiloVoo(cia, tipo) {
+        const nome = cia ? String(cia).toUpperCase().trim() : '';
+        let c='#495057', z=false, h='header-default';
+        if (nome.includes('LATAM') || nome === 'JJ' || nome === 'LA') { c='#E30613'; h='header-latam'; }
+        else if (nome.includes('AZUL') || nome === 'AD') { c='#009FE3'; h='header-azul'; }
+        else if (nome.includes('GOL') || nome === 'G3') { c='#FF7020'; z=true; h='header-gol'; }
+        
+        if (tipo === 'Geral') return { color: c, weight: 1.5, opacity: 0.3, dashArray: null, isZebra: false, headerClass: h };
+        return { color: c, weight: 4, opacity: 1, dashArray: z?'12,12':null, isZebra: z, headerClass: h };
+    }
+
+    async function CarregarAeroportosFundo(inicio, fim) {
+        layerAeroportos.clearLayers();
+        try {
+            const r = await fetch(`/malha/api/rotas?inicio=${inicio}&fim=${fim}`);
+            const t = await r.json();
+            const u = new Set();
+            t.forEach(rota => {
+                if(!u.has(rota.origem.iata)) { u.add(rota.origem.iata); DesenharPonto(rota.origem); }
+                if(!u.has(rota.destino.iata)) { u.add(rota.destino.iata); DesenharPonto(rota.destino); }
+            });
+            cacheAeroportosData = true;
+        } catch(e){}
+    }
+    function DesenharPonto(a) {
+        L.circleMarker([a.lat, a.lon], { radius:3, color:'#ced4da', weight:1, fillColor:'#e9ecef', fillOpacity:0.6 })
+         .bindTooltip(a.iata, { permanent:false, direction:'top', className: 'tooltip-aero' }).addTo(layerAeroportos);
+    }
+
+    // --- CONTROLES DE UI ---
+    function AlternarVisao(modo) {
+        const l = document.getElementById('lista-container');
+        const m = document.getElementById('mapa-container');
+        const f = document.getElementById('area-filtros');
+        const loc = document.getElementById('area-localizador');
+        
+        if (modo === 'lista') { 
+            l.style.display='grid'; m.style.display='none'; f.style.display='none'; loc.style.display='none';
+        } else { 
+            l.style.display='none'; m.style.display='block'; f.style.display='flex'; loc.style.display='block';
+            setTimeout(()=>map.invalidateSize(),100); if(!map) InicializarMapa(); 
+        }
+        document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn-'+modo).classList.add('active');
+    }
+    function LimparFiltros() {
+        document.getElementById('filtro-origem').value = '';
+        document.getElementById('filtro-destino').value = '';
+        CarregarMapa();
+    }
+</script>
 {% endblock %}
