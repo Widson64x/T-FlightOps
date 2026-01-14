@@ -7,7 +7,7 @@ from Models.POSTGRES.MalhaAerea import RemessaMalha, VooMalha
 from Utils.Formatadores import PadronizarData
 
 # Pasta temporária para guardar o arquivo enquanto o usuário confirma
-DIR_TEMP = 'Temp_Uploads'
+DIR_TEMP = 'Data/Temp_Malhas'
 if not os.path.exists(DIR_TEMP):
     os.makedirs(DIR_TEMP)
 

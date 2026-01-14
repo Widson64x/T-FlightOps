@@ -2,12 +2,14 @@ from flask import Flask, render_template
 from flask_login import LoginManager, login_required, current_user
 import os
 
-# Importação das Rotas e Modelos
-from Routes.RotasAutenticacao import AuthBp
-from Routes.RotasMalha import MalhaBp
 from Conexoes import ObterSessaoSqlServer
 from Models.SQL_SERVER.Usuario import Usuario, UsuarioGrupo
 from Models.UsuarioModel import UsuarioSistema
+
+# Importação das Rotas e Modelos
+from Routes.RotasAutenticacao import AuthBp
+from Routes.RotasMalha import MalhaBp
+from Routes.RotasAeroportos import AeroportoBp
 
 app = Flask(__name__)
 app.secret_key = 'CHAVE_SUPER_SECRETA_DO_PROJETO_VOOS' # Trocar por algo seguro depois
@@ -65,6 +67,7 @@ def CarregarUsuario(UserId):
 # Registrar as Rotas (Blueprints)
 app.register_blueprint(AuthBp, url_prefix='/auth')
 app.register_blueprint(MalhaBp)
+app.register_blueprint(AeroportoBp)
 
 @app.route('/')
 @login_required

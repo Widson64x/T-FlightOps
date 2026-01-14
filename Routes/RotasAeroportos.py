@@ -1,0 +1,74 @@
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask_login import login_required, current_user
+from datetime import datetime
+from Services.AeroportoService import AnalisarArquivoAeroportos, ProcessarAeroportosFinal, ListarRemessasAeroportos, ExcluirRemessaAeroporto
+
+AeroportoBp = Blueprint('Aeroporto', __name__)
+
+@AeroportoBp.route('/aeroportos/gerenciar', methods=['GET', 'POST'])
+@login_required
+def Gerenciar():
+    ModalConfirmacao = False
+    DadosConfirmacao = {}
+
+    if request.method == 'POST':
+        # --- Upload Inicial ---
+        if 'arquivo_csv' in request.files:
+            Arquivo = request.files['arquivo_csv']
+            if Arquivo.filename == '':
+                flash('Selecione um arquivo .csv', 'warning')
+            else:
+                Sucesso, Info = AnalisarArquivoAeroportos(Arquivo)
+                
+                if not Sucesso:
+                    flash(Info, 'danger')
+                else:
+                    if Info['conflito']:
+                        ModalConfirmacao = True
+                        DadosConfirmacao = Info
+                    else:
+                        Ok, Msg = ProcessarAeroportosFinal(
+                            Info['caminho_temp'], 
+                            Info['mes_ref'], 
+                            Info['nome_arquivo'], 
+                            current_user.Nome, 
+                            'Importacao'
+                        )
+                        if Ok: flash(Msg, 'success')
+                        else: flash(Msg, 'danger')
+                        return redirect(url_for('Aeroporto.Gerenciar'))
+
+        # --- Confirmação do Modal ---
+        elif 'confirmar_substituicao' in request.form:
+            CaminhoTemp = request.form.get('caminho_temp')
+            NomeOriginal = request.form.get('nome_arquivo')
+            MesStr = request.form.get('mes_ref') # Vem como 'YYYY-MM-DD'
+            
+            # Limpeza de segurança da data
+            if MesStr and ' ' in MesStr: MesStr = MesStr.split(' ')[0]
+            DataRef = datetime.strptime(MesStr, '%Y-%m-%d').date()
+
+            Ok, Msg = ProcessarAeroportosFinal(
+                CaminhoTemp, 
+                DataRef, 
+                NomeOriginal, 
+                current_user.Nome, 
+                'Substituicao'
+            )
+            if Ok: flash(Msg, 'success')
+            else: flash(Msg, 'danger')
+            return redirect(url_for('Aeroporto.Gerenciar'))
+
+    Historico = ListarRemessasAeroportos()
+    return render_template('Aeroportos/Gerenciar.html', 
+                           ListaRemessas=Historico, 
+                           ExibirModal=ModalConfirmacao, 
+                           DadosModal=DadosConfirmacao)
+
+@AeroportoBp.route('/aeroportos/excluir/<int:id_remessa>')
+@login_required
+def Excluir(id_remessa):
+    Sucesso, Mensagem = ExcluirRemessaAeroporto(id_remessa)
+    if Sucesso: flash(Mensagem, 'info')
+    else: flash(Mensagem, 'danger')
+    return redirect(url_for('Aeroporto.Gerenciar'))

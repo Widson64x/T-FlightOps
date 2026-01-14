@@ -17,13 +17,18 @@
             
             <nav>
                 <a href="/" 
-                   class="menu-link {{ 'ativo' if request.endpoint == 'Dashboard' else '' }}">
-                   📊 Dashboard
+                class="menu-link {{ 'ativo' if request.endpoint == 'Dashboard' else '' }}">
+                📊 Dashboard
                 </a>
 
                 <a href="{{ url_for('Malha.Gerenciar') }}" 
-                   class="menu-link {{ 'ativo' if request.endpoint and 'Malha' in request.endpoint else '' }}">
-                   🛫 Malha Aérea
+                class="menu-link {{ 'ativo' if request.endpoint and 'Malha' in request.endpoint else '' }}">
+                🛫 Malha Aérea
+                </a>
+
+                <a href="{{ url_for('Aeroporto.Gerenciar') }}" 
+                class="menu-link {{ 'ativo' if request.endpoint and 'Aeroporto' in request.endpoint else '' }}">
+                🌍 Aeroportos
                 </a>
 
                 <a href="#" class="menu-link">📅 Escalas</a>
