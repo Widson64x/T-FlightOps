@@ -1,0 +1,149 @@
+{% extends "Base.html" %}
+
+{% block titulo %}Base de Aeroportos | FlightOps{% endblock %}
+
+{% block conteudo %}
+
+<style>
+    /* Reutilizando o mesmo CSS da Malha para consistência visual */
+    .page-grid {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 24px;
+        height: calc(100vh - 140px); 
+        min-height: 500px;
+    }
+    @media (max-width: 1000px) { .page-grid { grid-template-columns: 1fr; height: auto; } }
+
+    .painel { background: var(--cor-fundo-painel); border: 1px solid var(--cor-borda); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 30px; }
+    .painel-header { padding: 15px 20px; border-bottom: 1px solid var(--cor-borda); background: rgba(0,0,0,0.01); font-weight: 600; color: var(--cor-texto-principal); display: flex; justify-content: space-between; }
+    .painel-body { padding: 20px; flex: 1; overflow-y: auto; }
+    .painel-tabela .painel-body { padding: 0; }
+    
+    .upload-zone { border: 2px dashed var(--cor-borda); border-radius: 6px; padding: 30px 20px; text-align: center; transition: all 0.2s; cursor: pointer; background: var(--cor-fundo-principal); }
+    .upload-zone:hover { border-color: var(--cor-primaria); background: rgba(0, 86, 179, 0.03); }
+    
+    .table-custom { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .table-custom th { background: var(--cor-fundo-principal); color: var(--cor-texto-secundario); font-weight: 600; text-align: left; padding: 12px 20px; position: sticky; top: 0; border-bottom: 1px solid var(--cor-borda); z-index: 5; }
+    .table-custom td { padding: 12px 20px; border-bottom: 1px solid var(--cor-borda); color: var(--cor-texto-principal); }
+    
+    .tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+    .tag-blue { background: #e3f2fd; color: #0d47a1; }
+    .tag-yellow { background: #fff3cd; color: #856404; }
+    
+    /* Modal */
+    .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+    .modal-content { background: var(--cor-fundo-painel); width: 400px; padding: 30px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center; }
+</style>
+
+{% if ExibirModal %}
+<div class="modal-backdrop">
+    <div class="modal-content">
+        <div style="font-size: 2.5rem; margin-bottom: 15px;">⚠️</div>
+        <h3 style="color: #dc3545; margin-bottom: 10px;">Versão Já Existente</h3>
+        <p style="color: var(--cor-texto-secundario); margin-bottom: 25px; line-height: 1.5;">
+            Já existe uma base de aeroportos carregada para o mês de <br>
+            <strong>{{ DadosModal.mes_ref.strftime('%m/%Y') }}</strong>.<br><br>
+            Deseja substituir a versão atual?
+        </p>
+        
+        <form method="POST" style="display: flex; gap: 10px; justify-content: center;">
+            <input type="hidden" name="confirmar_substituicao" value="true">
+            <input type="hidden" name="caminho_temp" value="{{ DadosModal.caminho_temp }}">
+            <input type="hidden" name="nome_arquivo" value="{{ DadosModal.nome_arquivo }}">
+            <input type="hidden" name="mes_ref" value="{{ DadosModal.mes_ref }}">
+            
+            <a href="{{ url_for('Aeroporto.Gerenciar') }}" class="btn-primario" style="background: #6c757d; text-decoration: none;">Cancelar</a>
+            <button type="submit" class="btn-primario" style="background: #dc3545;">Sim, Substituir</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div style="margin-bottom: 20px;">
+    <h2 style="font-weight: 600; color: var(--cor-texto-principal);">Base de Aeroportos</h2>
+    <p style="color: var(--cor-texto-secundario); font-size: 0.9rem;">Cadastro mundial de IATA/ICAO e coordenadas geográficas.</p>
+</div>
+
+<div class="page-grid">
+    
+    <div class="painel" style="height: fit-content;">
+        <div class="painel-header">Atualizar Base</div>
+        <div class="painel-body">
+            <form method="POST" enctype="multipart/form-data">
+                <label style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; display: block;">Arquivo CSV (IATA/ICAO)</label>
+                
+                <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+                    <span style="font-size: 2rem;">🌍</span><br>
+                    <span style="font-size: 0.9rem; font-weight: 500;">Clique para Upload</span>
+                    <input type="file" id="fileInput" name="arquivo_csv" accept=".csv" style="display: none;" onchange="this.form.submit()">
+                </div>
+
+                <div style="margin-top: 15px; font-size: 0.8rem; color: var(--cor-texto-secundario); background: var(--cor-fundo-principal); padding: 10px; border-radius: 4px;">
+                    <strong>Info:</strong> A data de referência será definida automaticamente como o mês atual.
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="painel painel-tabela">
+        <div class="painel-header">
+            <span>Histórico de Atualizações</span>
+        </div>
+        
+        <div class="painel-body">
+            <table class="table-custom">
+                <thead>
+                    <tr>
+                        <th>Competência</th>
+                        <th>Tipo</th>
+                        <th>Arquivo</th>
+                        <th>Responsável</th>
+                        <th>Status</th>
+                        <th style="text-align: center;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for remessa in ListaRemessas %}
+                    <tr>
+                        <td style="font-weight: 600;">{{ remessa.MesReferencia.strftime('%m/%Y') }}</td>
+                        <td>
+                            {% if remessa.TipoAcao == 'Substituicao' %}
+                                <span class="tag tag-yellow">Substituição</span>
+                            {% else %}
+                                <span class="tag tag-blue">Importação</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size: 0.85rem; color: var(--cor-texto-secundario);">{{ remessa.NomeArquivoOriginal }}</td>
+                        <td>
+                            <div style="font-weight: 500;">{{ remessa.UsuarioResponsavel }}</div>
+                            <div style="font-size: 0.75rem; color: #999;">{{ remessa.DataUpload.strftime('%d/%m %H:%M') }}</div>
+                        </td>
+                        <td>
+                            {% if remessa.Ativo %}
+                                <span style="color: #155724; font-weight: 600; font-size: 0.85rem;">✅ Ativo</span>
+                            {% else %}
+                                <span style="color: #6c757d; font-size: 0.85rem;">Histórico</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center;">
+                            <a href="{{ url_for('Aeroporto.Excluir', id_remessa=remessa.Id) }}" 
+                               onclick="return confirm('ATENÇÃO: Isso apagará toda a base de aeroportos desta versão.\nContinuar?')"
+                               style="text-decoration: none;" title="Excluir">
+                               ❌
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 50px; color: var(--cor-texto-secundario);">
+                            Nenhuma base de aeroportos carregada.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
