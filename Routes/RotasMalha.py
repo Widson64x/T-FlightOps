@@ -1,10 +1,32 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
-from datetime import datetime # <--- AQUI: Importação correta da classe
-from Services.MalhaService import AnalisarArquivo, ProcessarMalhaFinal, ListarRemessas, ExcluirRemessa
+from datetime import datetime
+from Services.MalhaService import AnalisarArquivo, ProcessarMalhaFinal, ListarRemessas, ExcluirRemessa, BuscarRotasInteligentes
 
 MalhaBp = Blueprint('Malha', __name__)
 
+@MalhaBp.route('/malha/api/rotas')
+@login_required
+def ApiRotas():
+    Inicio = request.args.get('inicio')
+    Fim = request.args.get('fim')
+    Origem = request.args.get('origem')   # Novo
+    Destino = request.args.get('destino') # Novo
+    
+    if not Inicio or not Fim:
+        return jsonify([])
+
+    try:
+        from datetime import datetime
+        DataIni = datetime.strptime(Inicio, '%Y-%m-%d').date()
+        DataFim = datetime.strptime(Fim, '%Y-%m-%d').date()
+        
+        # Chama a busca inteligente
+        Dados = BuscarRotasInteligentes(DataIni, DataFim, Origem, Destino)
+        return jsonify(Dados)
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+    
 @MalhaBp.route('/malha/gerenciar', methods=['GET', 'POST'])
 @login_required
 def Gerenciar():

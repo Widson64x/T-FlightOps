@@ -150,3 +150,29 @@ def ProcessarAeroportosFinal(CaminhoArquivo, DataRef, NomeOriginal, Usuario, Tip
         return False, f"Erro técnico ao processar: {e}"
     finally:
         Sessao.close()
+        
+def ListarTodosParaSelect():
+    """
+    Retorna lista simplificada para preencher combobox/datalist no frontend.
+    """
+    Sessao = ObterSessaoPostgres()
+    try:
+        # Busca apenas o necessário: IATA, Nome e Coordenadas
+        Dados = Sessao.query(
+            Aeroporto.CodigoIata, 
+            Aeroporto.NomeAeroporto,
+            Aeroporto.Latitude,
+            Aeroporto.Longitude
+        ).filter(Aeroporto.CodigoIata != None).all()
+        
+        Lista = []
+        for Linha in Dados:
+            Lista.append({
+                'iata': Linha.CodigoIata,
+                'nome': Linha.NomeAeroporto,
+                'lat': Linha.Latitude,
+                'lon': Linha.Longitude
+            })
+        return Lista
+    finally:
+        Sessao.close()
