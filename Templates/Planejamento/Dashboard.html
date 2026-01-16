@@ -5,231 +5,185 @@
 {% block conteudo %}
 
 <style>
-    /* --- VARIÁVEIS DO TEMA (Só valem aqui dentro) --- */
+    /* --- TEMA EXECUTIVO --- */
     .dash-executivo {
-        --cor-destaque: #0d6efd;       /* Azul Executivo */
-        --cor-sucesso: #198754;        /* Verde Finanças */
-        --cor-alerta: #dc3545;         /* Vermelho Prioridade */
+        --cor-destaque: #0d6efd;       /* Azul Principal */
+        --cor-sucesso: #198754;        /* Verde Status */
         --cor-texto: #212529;
         --cor-texto-suave: #6c757d;
         --cor-borda: #e0e0e0;
         --bg-fundo: #f8f9fa;
-        --bg-tabela-head: #ffffff;
-        --bg-novo-item: #e8f5e9;       /* Verde claro para animação */
         
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-family: 'Inter', -apple-system, sans-serif;
         color: var(--cor-texto);
-        height: 100%;
+        height: calc(100vh - 80px); /* Ocupa altura total menos topo */
         display: flex;
         flex-direction: column;
         gap: 20px;
-        padding-bottom: 20px;
+        padding: 10px 20px 20px 20px;
+        box-sizing: border-box;
     }
 
-    /* --- LAYOUT DO TOPO --- */
+    /* --- CABEÇALHO --- */
     .dash-header {
         display: flex;
         justify-content: space-between;
-        align-items: flex-end;
-        border-bottom: 1px solid var(--cor-borda);
+        align-items: center;
         padding-bottom: 15px;
+        border-bottom: 1px solid var(--cor-borda);
     }
 
-    .dash-title h2 {
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1a1a1a;
-        display: flex;
-        align-items: center;
-        gap: 12px;
+    .header-left h2 {
+        margin: 0; font-size: 1.6rem; font-weight: 700; color: #1a1a1a;
+        display: flex; align-items: center; gap: 12px;
     }
+    .header-sub { font-size: 0.85rem; color: var(--cor-texto-suave); margin-top: 4px; }
 
-    .dash-subtitle {
-        margin: 5px 0 0 0;
-        font-size: 0.85rem;
-        color: var(--cor-texto-suave);
+    /* Botão Torre de Controle */
+    .btn-torre {
+        text-decoration: none;
+        background: #212529; color: #fff;
+        padding: 10px 18px; border-radius: 6px;
+        font-weight: 600; font-size: 0.9rem;
+        display: flex; align-items: center; gap: 8px;
+        transition: transform 0.2s, background 0.2s;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
+    .btn-torre:hover { background: #000; transform: translateY(-2px); }
 
-    /* Tag "Ao Vivo" Pulsante */
+    /* Tag Ao Vivo */
     .live-badge {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: var(--cor-sucesso);
-        background: rgba(25, 135, 84, 0.1);
-        padding: 4px 10px;
-        border-radius: 4px;
-        border: 1px solid rgba(25, 135, 84, 0.2);
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px;
+        color: var(--cor-sucesso); background: rgba(25, 135, 84, 0.1);
+        padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(25, 135, 84, 0.2);
+        display: flex; align-items: center; gap: 6px;
     }
     .live-dot {
-        width: 8px; height: 8px;
-        background-color: var(--cor-sucesso);
-        border-radius: 50%;
-        animation: pulse 1.5s infinite;
+        width: 8px; height: 8px; background-color: var(--cor-sucesso);
+        border-radius: 50%; animation: pulse 1.5s infinite;
     }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
-    /* --- CARDS DE KPI (INDICADORES) --- */
-    .kpi-wrapper {
-        display: flex;
-        gap: 20px;
+    /* --- KPIS (INDICADORES) --- */
+    .kpi-container {
+        display: flex; gap: 20px;
     }
-
-    .kpi-box {
-        background: #fff;
-        border: 1px solid var(--cor-borda);
-        border-radius: 8px;
-        padding: 12px 20px;
-        min-width: 140px;
+    .kpi-card {
+        background: #fff; border: 1px solid var(--cor-borda);
+        border-radius: 8px; padding: 10px 20px;
+        min-width: 150px; display: flex; flex-direction: column;
         box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
     }
+    .kpi-titulo { font-size: 0.75rem; color: var(--cor-texto-suave); font-weight: 600; text-transform: uppercase; }
+    .kpi-valor { font-size: 1.3rem; font-weight: 700; color: var(--cor-texto); margin-top: 2px; }
+    .kpi-destaque { color: var(--cor-sucesso); }
 
-    .kpi-label { font-size: 0.75rem; color: var(--cor-texto-suave); font-weight: 600; text-transform: uppercase; }
-    .kpi-value { font-size: 1.2rem; font-weight: 700; color: var(--cor-texto); margin-top: 4px; }
-    .kpi-value.money { color: var(--cor-sucesso); font-family: 'Consolas', monospace; }
-
-    /* --- TABELA EXECUTIVA (Estilo Isolado) --- */
-    .table-panel {
-        background: #fff;
-        border: 1px solid var(--cor-borda);
-        border-radius: 8px;
-        flex: 1; /* Ocupa o resto da tela */
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
+    /* --- TABELA --- */
+    .table-wrapper {
+        background: #fff; border: 1px solid var(--cor-borda);
+        border-radius: 8px; flex: 1; overflow: hidden;
+        display: flex; flex-direction: column;
         box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     }
+    
+    .table-scroll { flex: 1; overflow: auto; }
 
-    .table-scroll-area {
-        overflow: auto;
-        flex: 1;
-        position: relative;
-    }
-
-    /* AQUI É O SEGREDO: Usamos .dash-table para não quebrar a Navbar */
     .dash-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.8rem;
-        white-space: nowrap;
+        width: 100%; border-collapse: collapse; font-size: 0.85rem; white-space: nowrap;
     }
-
     .dash-table th {
         position: sticky; top: 0; z-index: 10;
-        background: var(--bg-tabela-head);
-        color: var(--cor-texto-suave);
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.7rem;
-        padding: 14px 12px;
-        border-bottom: 2px solid var(--cor-borda);
-        text-align: left;
+        background: #f8f9fa; color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.7rem;
+        padding: 14px 12px; border-bottom: 2px solid #eee; text-align: left;
     }
-
     .dash-table td {
-        padding: 10px 12px;
-        border-bottom: 1px solid var(--cor-borda);
-        vertical-align: middle;
-        transition: background 0.3s;
+        padding: 12px; border-bottom: 1px solid #eee; vertical-align: middle; color: #444;
     }
-
     .dash-table tr:hover td { background-color: #f8f9fa; }
 
-    /* Estilos Específicos de Coluna */
-    .text-right { text-align: right; }
-    .text-center { text-align: center; }
-    .font-mono { font-family: 'Consolas', monospace; letter-spacing: -0.5px; }
-    .font-bold { font-weight: 700; }
-    .text-dim { color: #adb5bd; }
+    /* Colunas Especiais */
+    .col-filial { font-weight: bold; color: #333; text-align: center; }
+    .col-ctc { font-weight: 700; color: var(--cor-destaque); font-family: monospace; font-size: 0.9rem; }
+    .col-rota { font-weight: 600; }
+    .col-money { font-family: 'Consolas', monospace; text-align: right; font-weight: 600; }
+    .col-prio span { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
     
-    .col-highlight { 
-        background-color: #fcfcfc; 
-        color: var(--cor-sucesso);
-        border-left: 1px solid var(--cor-borda);
-    }
+    /* Status Badges */
+    .bg-alta { background: #fee2e2; color: #dc2626; }
+    .bg-normal { background: #e9ecef; color: #495057; }
 
-    /* Badges de Prioridade */
-    .badge-prio { padding: 3px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700; }
-    .badge-ALTA { background: #fee2e2; color: #dc2626; }
-    .badge-NORMAL { background: #e9ecef; color: #495057; }
+    /* Botão de Ação da Tabela */
+    .btn-table-action {
+        background: #fff; border: 1px solid #ddd;
+        width: 32px; height: 32px; border-radius: 6px;
+        display: flex; align-items: center; justify-content: center;
+        text-decoration: none; transition: 0.2s; cursor: pointer;
+    }
+    .btn-table-action:hover { background: #0d6efd; color: #fff; border-color: #0d6efd; transform: scale(1.1); }
 
-    /* --- ANIMAÇÕES DE ENTRADA (Slide & Fade) --- */
-    .animate-entry {
-        animation: slideIn 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-        background-color: var(--bg-novo-item) !important;
-    }
-    
-    @keyframes slideIn {
-        from { opacity: 0; transform: translateY(15px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .animate-stabilize {
-        transition: background-color 2.5s ease-out;
-        background-color: transparent !important;
-    }
+    /* Animação */
+    .novo-item { animation: highlight 1s ease-out; }
+    @keyframes highlight { from { background-color: #e8f5e9; } to { background-color: transparent; } }
+
 </style>
 
 <div class="dash-executivo">
 
     <div class="dash-header">
-        <div class="dash-title">
+        <div class="header-left">
             <h2>
                 Emissões Aéreo
                 <div class="live-badge"><div class="live-dot"></div> On Time</div>
             </h2>
-            <p class="dash-subtitle">
-                Monitoramento de CTEs em Tempo Real • <span id="data-extenso"></span>
-            </p>
+            <div class="header-sub">
+                Monitoramento em tempo real • <span id="data-extenso"></span>
+            </div>
         </div>
 
-        <div class="kpi-wrapper">
-            <div class="kpi-box">
-                <span class="kpi-label">Volume Doc.</span>
-                <span class="kpi-value" id="kpi-docs">0</span>
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <span class="kpi-titulo">Volume Doc.</span>
+                <span class="kpi-valor" id="kpi-docs">0</span>
             </div>
-            <div class="kpi-box">
-                <span class="kpi-label">Peso Taxado Total</span>
-                <span class="kpi-value" id="kpi-peso">0,00 kg</span>
+            <div class="kpi-card">
+                <span class="kpi-titulo">Peso Taxado</span>
+                <span class="kpi-valor" id="kpi-peso">0 kg</span>
             </div>
-            <div class="kpi-box" style="border-color: #c3e6cb; background: #f8fff9;">
-                <span class="kpi-label" style="color: #155724;">Faturamento Dia</span>
-                <span class="kpi-value money" id="kpi-fat">R$ 0,00</span>
+            <div class="kpi-card" style="border-bottom: 3px solid var(--cor-sucesso);">
+                <span class="kpi-titulo" style="color: var(--cor-sucesso);">Faturamento</span>
+                <span class="kpi-valor kpi-destaque" id="kpi-fat">R$ 0,00</span>
             </div>
+            
+            <a href="{{ url_for('Planejamento.MapaGlobal') }}" class="btn-torre">
+                🌍 Torre de Controle
+            </a>
         </div>
     </div>
 
-    <div class="table-panel">
-        <div class="table-scroll-area">
-            <table class="dash-table" id="tabela-ctc">
+    <div class="table-wrapper">
+        <div class="table-scroll">
+            <table class="dash-table">
                 <thead>
                     <tr>
-                        <th class="text-center" width="60">Filial</th>
-                        <th width="90">Número CTC</th>
-                        <th class="text-center" width="70">Hora</th>
-                        <th class="text-center" width="80">Status</th>
+                        <th width="50" style="text-align:center;">Ação</th>
+                        <th class="col-filial" width="60">Filial</th>
+                        <th width="100">Documento</th>
+                        <th width="80">Hora</th>
+                        <th width="80">Data</th>
+                        <th width="90" style="text-align:center;">Prioridade</th>
                         <th>Rota (Origem ➝ Destino)</th>
                         <th>Remetente</th>
                         <th>Destinatário</th>
-                        <th>Natureza</th>
-                        <th class="text-right">Vol.</th>
-                        <th class="text-right text-dim">Peso Real</th>
-                        <th class="text-right font-bold" style="color: var(--cor-destaque);">Peso Tax.</th>
-                        <th class="text-right text-dim">Val. Merc.</th>
-                        <th class="text-right">Frete Valor</th>
-                        <th class="text-right">GRIS</th>
-                        <th class="text-right col-highlight font-mono">Frete Total</th>
+                        <th style="text-align:right;">Vol.</th>
+                        <th style="text-align:right;">Peso Tax.</th>
+                        <th style="text-align:right;">Peso</th>
+                        <th style="text-align:right;">Valor Merc.</th>
+                        <th width="100" style="text-align:center;">NFs</th>
+                        <th style="text-align:right;">Frete Total</th>
                     </tr>
                 </thead>
                 <tbody id="table-body">
-                    <tr><td colspan="15" class="text-center" style="padding: 40px; color: #999;">Carregando dados...</td></tr>
+                    <tr><td colspan="12" style="text-align:center; padding:40px; color:#999;">Carregando dados...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -238,108 +192,101 @@
 </div>
 
 <script>
-    // --- LÓGICA JAVASCRIPT ---
+    // --- LÓGICA DO DASHBOARD ---
     
-    // Configuração de Rotas Dinâmicas (Injetado pelo Flask)
-    // Ajuste 'Planejamento.ApiCtcsHoje' se o nome da função for diferente no Controller
-    const API_URLS = {
-        ctcsHoje: "{{ url_for('Planejamento.ApiCtcsHoje') }}" 
+    // Rotas do Flask injetadas no JS
+    const URLS = {
+        api: "{{ url_for('Planejamento.ApiCtcsHoje') }}",
+        baseMontar: "{{ url_for('Planejamento.MontarPlanejamento', filial='0', serie='0', ctc='0') }}"
     };
 
-    // 1. Data por Extenso
-    const opcoesData = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
-    document.getElementById('data-extenso').innerText = new Date().toLocaleDateString('pt-BR', opcoesData);
+    function gerarLink(filial, serie, ctc) {
+        return URLS.baseMontar
+            .replace('/0/0/0', `/${filial}/${serie}/${ctc}`) // com barra
+            .replace('0/0/0', `${filial}/${serie}/${ctc}`);  // sem barra
+    }
 
-    // 2. Controle de Estado (Para saber quem é novo)
-    let ctcsJaVistos = new Set();
+    // Data Atual
+    const opts = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+    document.getElementById('data-extenso').innerText = new Date().toLocaleDateString('pt-BR', opts);
 
-    async function AtualizarDashboard() {
+    let vistos = new Set();
+
+    async function Atualizar() {
         try {
-            // Alterado para usar a variável dinâmica em vez da string hardcoded
-            const response = await fetch(API_URLS.ctcsHoje);
-            const dados = await response.json();
-
+            const resp = await fetch(URLS.api);
+            const dados = await resp.json();
             const tbody = document.getElementById('table-body');
-            
-            // Variáveis para somatória KPI
-            let totalFaturamento = 0;
-            let totalPesoTaxado = 0;
 
             if (dados.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="15" class="text-center" style="padding: 40px; color: #999;">Nenhuma emissão aéreo encontrada hoje.</td></tr>';
-                document.getElementById('kpi-docs').innerText = "0";
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:40px; color:#999;">Sem emissões aéreas hoje.</td></tr>';
+                AtualizarKPIs(0, 0, 0);
                 return;
             }
 
-            // Gera o HTML das linhas
-            const linhasHTML = dados.map(row => {
-                // Atualiza KPIs
-                totalFaturamento += row.raw_frete_total;
-                totalPesoTaxado += row.peso_taxado;
+            let somaFat = 0;
+            let somaPeso = 0;
 
-                // Verifica se é novo para animar
-                const ehNovo = !ctcsJaVistos.has(row.id_unico);
-                if (ehNovo) ctcsJaVistos.add(row.id_unico);
+            const html = dados.map(r => {
+                somaFat += r.raw_frete_total;
+                somaPeso += r.peso_taxado;
 
-                const classeAnimacao = ehNovo ? 'animate-entry' : '';
+                // Animação para novos itens
+                const novo = !vistos.has(r.id_unico);
+                if (novo) vistos.add(r.id_unico);
+                const classeAnim = novo ? 'novo-item' : '';
+
+                // Badge de Prioridade
+                const pCls = r.prioridade === 'URGENTE' ? 'bg-alta' : 'bg-normal';
                 
-                // Formatação da Prioridade
-                const badgePrio = row.prioridade === 'ALTA' ? 'badge-ALTA' : 'badge-NORMAL';
-                const textoPrio = row.prioridade || 'NORMAL';
-
                 return `
-                <tr class="${classeAnimacao}" onanimationend="this.classList.remove('animate-entry'); this.classList.add('animate-stabilize')">
-                    <td class="text-center text-dim">${row.filial}</td>
-                    <td class="font-bold" style="color: var(--cor-texto);">${row.ctc}</td>
-                    <td class="text-center text-dim" style="font-size: 0.75rem;">${row.hora_emissao}</td>
-                    <td class="text-center"><span class="badge-prio ${badgePrio}">${textoPrio}</span></td>
-                    
-                    <td>
-                        <div style="font-weight: 600;">${row.origem}</div>
-                        <div style="font-size: 0.7rem; color: #888;">➝ ${row.destino}</div>
+                <tr class="${classeAnim}">
+                    <td style="text-align:center;">
+                        <a href="${gerarLink(r.filial, r.serie, r.ctc)}" class="btn-table-action" title="Planejar Rota">
+                            🗺️
+                        </a>
                     </td>
-                    
-                    <td title="${row.remetente}" style="max-width: 140px; overflow: hidden; text-overflow: ellipsis;">${row.remetente.substring(0, 18)}</td>
-                    <td title="${row.destinatario}" style="max-width: 140px; overflow: hidden; text-overflow: ellipsis;">${row.destinatario.substring(0, 18)}</td>
-                    
-                    <td>
-                        <div>${row.natureza}</div>
-                        <div style="font-size: 0.65rem; color: #999;">${row.especie}</div>
+                    <td class="col-filial">${r.filial}</td>
+                    <td class="col-ctc">${r.ctc}</td>
+                    <td style="color:#666;">${r.data_emissao}</td>
+                    <td style="color:#666;">${r.hora_emissao}</td>
+                    <td style="text-align:center;" class="col-prio">
+                        <span class="${pCls}">${r.prioridade || 'NORMAL'}</span>
                     </td>
-                    
-                    <td class="text-right">${row.volumes}</td>
-                    <td class="text-right text-dim">${row.peso_real.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                    <td class="text-right font-bold" style="color: var(--cor-destaque);">${row.peso_taxado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                    
-                    <td class="text-right text-dim" style="font-size:0.7rem;">R$ ${row.val_mercadoria}</td>
-                    <td class="text-right text-dim" style="font-size:0.7rem;">R$ ${row.frete_valor}</td>
-                    <td class="text-right text-dim" style="font-size:0.7rem;">R$ ${row.gris}</td>
-                    
-                    <td class="text-right col-highlight font-mono font-bold">
-                        R$ ${row.frete_total}
+                    <td class="col-rota">
+                        ${r.origem} <span style="color:#ccc;">➝</span> ${r.destino}
                     </td>
+                    <td title="${r.remetente}">${r.remetente.substring(0,15)}...</td>
+                    <td title="${r.destinatario}">${r.destinatario.substring(0,15)}...</td>
+                    
+                    <td style="text-align:right;">${r.volumes}</td>
+                    <td style="text-align:right;">${r.peso_taxado.toLocaleString('pt-BR', {minimumFractionDigits:2})}</td>
+                    <td style="text-align:right; color:#666;">${r.peso_real.toLocaleString('pt-BR', {minimumFractionDigits:2})}</td>
+                    <td class="col-money" style="font-size:0.8rem; color:#666;">${r.val_mercadoria}</td>
+                    <td style="text-align:center;">${r.nfs}</td>
+                    <td class="col-money" style="color:var(--cor-sucesso); background:#fcfcfc;">${r.frete_total}</td>
+
                 </tr>
                 `;
             }).join('');
 
-            // Atualiza Tabela
-            tbody.innerHTML = linhasHTML;
-
-            // Atualiza KPIs com efeito visual simples
-            document.getElementById('kpi-docs').innerText = dados.length;
-            document.getElementById('kpi-peso').innerText = totalPesoTaxado.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + ' kg';
-            document.getElementById('kpi-fat').innerText = totalFaturamento.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+            tbody.innerHTML = html;
+            AtualizarKPIs(dados.length, somaPeso, somaFat);
 
         } catch (e) {
-            console.error("Erro no refresh:", e);
+            console.error("Erro refresh:", e);
         }
     }
 
-    // Inicialização
-    AtualizarDashboard();
-    
-    // Atualização Automática (10 segundos)
-    setInterval(AtualizarDashboard, 10000);
+    function AtualizarKPIs(docs, peso, valor) {
+        document.getElementById('kpi-docs').innerText = docs;
+        document.getElementById('kpi-peso').innerText = peso.toLocaleString('pt-BR', {maximumFractionDigits:0}) + ' kg';
+        document.getElementById('kpi-fat').innerText = valor.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    }
+
+    // Loop
+    Atualizar();
+    setInterval(Atualizar, 10000);
 
 </script>
 {% endblock %}

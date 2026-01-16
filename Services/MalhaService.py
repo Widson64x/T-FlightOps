@@ -1,8 +1,7 @@
 import os
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date, time
 from sqlalchemy import desc
-from sqlalchemy.orm import aliased
 from Conexoes import ObterSessaoPostgres
 from Models.POSTGRES.Aeroporto import Aeroporto
 from Models.POSTGRES.MalhaAerea import RemessaMalha, VooMalha
@@ -14,7 +13,7 @@ DIR_TEMP = 'Data/Temp_Malhas'
 if not os.path.exists(DIR_TEMP):
     os.makedirs(DIR_TEMP)
 
-# --- FUNÇÕES DE CONTROLE DE REMESSAS (Mantidas) ---
+# --- FUNÇÕES DE CONTROLE DE REMESSAS (Mantidas iguais) ---
 def ListarRemessas():
     Sessao = ObterSessaoPostgres()
     try:
@@ -100,21 +99,28 @@ def ProcessarMalhaFinal(CaminhoArquivo, DataRef, NomeOriginal, Usuario, TipoAcao
         ListaVoos = []
         for _, Linha in Df.iterrows():
             try:
-                H_Saida = pd.to_datetime(str(Linha['HORÁRIO DE SAIDA']), format='%H:%M:%S', errors='coerce').time() if str(Linha['HORÁRIO DE SAIDA']) != 'nan' else datetime.min.time()
-                H_Chegada = pd.to_datetime(str(Linha['HORÁRIO DE CHEGADA']), format='%H:%M:%S', errors='coerce').time() if str(Linha['HORÁRIO DE CHEGADA']) != 'nan' else datetime.min.time()
+                # Tratamento de Horário Seguro
+                raw_saida = str(Linha.get('HORÁRIO DE SAIDA', ''))
+                raw_chegada = str(Linha.get('HORÁRIO DE CHEGADA', ''))
+                
+                if len(raw_saida) == 5: raw_saida += ":00"
+                if len(raw_chegada) == 5: raw_chegada += ":00"
+
+                H_Saida = pd.to_datetime(raw_saida, format='%H:%M:%S', errors='coerce').time() if raw_saida != 'nan' else time(0,0)
+                H_Chegada = pd.to_datetime(raw_chegada, format='%H:%M:%S', errors='coerce').time() if raw_chegada != 'nan' else time(0,0)
             except:
-                H_Saida = datetime.min.time()
-                H_Chegada = datetime.min.time()
+                H_Saida = time(0,0)
+                H_Chegada = time(0,0)
 
             Voo = VooMalha(
                 IdRemessa=NovaRemessa.Id,
-                CiaAerea=str(Linha['CIA']),
-                NumeroVoo=str(Linha['Nº VOO']),
+                CiaAerea=str(Linha.get('CIA', '')),
+                NumeroVoo=str(Linha.get('Nº VOO', '')),
                 DataPartida=Linha['DATA_PADRAO'],
-                AeroportoOrigem=str(Linha['ORIGEM']),
+                AeroportoOrigem=str(Linha.get('ORIGEM', '')),
                 HorarioSaida=H_Saida,
                 HorarioChegada=H_Chegada,
-                AeroportoDestino=str(Linha['DESTINO'])
+                AeroportoDestino=str(Linha.get('DESTINO', ''))
             )
             ListaVoos.append(Voo)
 
@@ -124,7 +130,7 @@ def ProcessarMalhaFinal(CaminhoArquivo, DataRef, NomeOriginal, Usuario, TipoAcao
         if os.path.exists(CaminhoArquivo):
             os.remove(CaminhoArquivo)
             
-        return True, f"Malha de {DataRef.strftime('%m/%Y')} processada com sucesso! ({TipoAcao})"
+        return True, f"Malha processada com sucesso!"
 
     except Exception as e:
         Sessao.rollback()
@@ -132,201 +138,186 @@ def ProcessarMalhaFinal(CaminhoArquivo, DataRef, NomeOriginal, Usuario, TipoAcao
     finally:
         Sessao.close()
 
-# --- ALGORITMO DE ROTAS INTELIGENTES (REFATORADO) ---
+# --- BUSCA INTELIGENTE E ROTEAMENTO (CORRIGIDA) ---
 
 def BuscarRotasInteligentes(DataInicio, DataFim, OrigemIata=None, DestinoIata=None):
     Sessao = ObterSessaoPostgres()
     try:
+        # 1. Filtros para o Banco (Converter tudo para DATE puro)
+        # O banco compara apenas data, a hora será validada no python depois
+        FiltroDataInicio = DataInicio.date() if isinstance(DataInicio, datetime) else DataInicio
+        FiltroDataFim = DataFim.date() if isinstance(DataFim, datetime) else DataFim
+
         OrigemIata = OrigemIata.upper().strip() if OrigemIata else None
         DestinoIata = DestinoIata.upper().strip() if DestinoIata else None
         
-        # 1. Carregar Voos do Banco
-        VoosDB = Sessao.query(
-            VooMalha,
-            Aeroporto.Latitude, Aeroporto.Longitude, Aeroporto.NomeAeroporto
-        ).join(Aeroporto, VooMalha.AeroportoOrigem == Aeroporto.CodigoIata)\
-         .filter(VooMalha.DataPartida >= DataInicio, VooMalha.DataPartida <= DataFim + timedelta(days=3))\
-         .all()
+        # 2. Busca todos os voos na janela estendida (+1 dia para conexões que viram a noite)
+        VoosDB = Sessao.query(VooMalha).filter(
+            VooMalha.DataPartida >= FiltroDataInicio, 
+            VooMalha.DataPartida <= FiltroDataFim + timedelta(days=1)
+        ).all()
         
         DadosAeroportos = {}
         G = nx.DiGraph()
-        ListaGeral = []
+        ListaGeral = [] # Usado apenas se não for roteamento
 
-        for Voo, Lat, Lon, Nome in VoosDB:
-            if Voo.AeroportoOrigem not in DadosAeroportos:
-                DadosAeroportos[Voo.AeroportoOrigem] = {'lat': Lat, 'lon': Lon, 'nome': Nome}
+        # 3. Monta o Grafo
+        for Voo in VoosDB:
+            if not (OrigemIata and DestinoIata):
+                # Se for busca genérica (sem origem/destino), adiciona na lista simples
+                if (not OrigemIata or Voo.AeroportoOrigem == OrigemIata) and \
+                   (not DestinoIata or Voo.AeroportoDestino == DestinoIata):
+                       ListaGeral.append(Voo)
             
+            # Adiciona ao Grafo
             if G.has_edge(Voo.AeroportoOrigem, Voo.AeroportoDestino):
                 G[Voo.AeroportoOrigem][Voo.AeroportoDestino]['voos'].append(Voo)
             else:
                 G.add_edge(Voo.AeroportoOrigem, Voo.AeroportoDestino, voos=[Voo])
 
-            # Lógica Visão Geral
-            if not (OrigemIata and DestinoIata):
-                if (not OrigemIata or Voo.AeroportoOrigem == OrigemIata) and \
-                   (not DestinoIata or Voo.AeroportoDestino == DestinoIata):
-                       if DataInicio <= Voo.DataPartida <= DataFim:
-                           ListaGeral.append(Voo)
-
+        # Se não tem origem/destino, retorna lista simples
         if not (OrigemIata and DestinoIata):
             CompletarCacheDestinos(Sessao, ListaGeral, DadosAeroportos)
-            return FormatarListaRotas(ListaGeral[:5000], DadosAeroportos, 'Geral')
+            return FormatarListaRotas(ListaGeral[:2000], DadosAeroportos, 'Geral')
 
-        # --- ESTRATÉGIA DE MENOR CAMINHO EFICIENTE ---
+        # --- ALGORITMO DE MENOR CAMINHO ---
         if not G.has_node(OrigemIata) or not G.has_node(DestinoIata):
             return []
             
         try:
-            # Busca todos os caminhos possíveis (Topologia)
-            CaminhosPossiveis = list(nx.all_simple_paths(G, source=OrigemIata, target=DestinoIata, cutoff=3))
+            # Busca rotas possíveis (Topologia apenas)
+            Caminhos = list(nx.all_simple_paths(G, source=OrigemIata, target=DestinoIata, cutoff=3))
             
-            if not CaminhosPossiveis:
-                return []
+            if not Caminhos: return []
             
-            RotasCandidatas = []
+            RotasValidas = []
+            for CaminhoNos in Caminhos:
+                # CORREÇÃO: Passamos DataInicio original (que pode ter Hora)
+                Rota = ValidarCaminhoCronologico(G, CaminhoNos, DataInicio)
+                if Rota:
+                    RotasValidas.append(Rota)
+            
+            if not RotasValidas: return []
 
-            # Itera sobre TODOS os caminhos para validar horários
-            for CaminhoNos in CaminhosPossiveis:
-                RotaValida = ValidarCaminhoCronologico(G, CaminhoNos, DataInicio)
-                if RotaValida:
-                    RotasCandidatas.append(RotaValida)
-            
-            if not RotasCandidatas:
-                return []
+            # Ordena por: 1) Menor Duração, 2) Menos Escalas
+            RotasValidas.sort(key=lambda r: (CalcularDuracaoRota(r), len(r)))
 
-            # --- O PULO DO GATO: ORDENAÇÃO INTELIGENTE ---
-            # Ordenamos as rotas encontradas baseadas em:
-            # 1. Duração Total (Chegada no Destino - Saída da Origem) -> Mais rápido ganha
-            # 2. Número de Escalas (Menos escalas ganha como critério de desempate)
-            
-            RotasCandidatas.sort(key=lambda r: (CalcularDuracaoRota(r), len(r)))
-
-            # Pega a campeã
-            MelhorRota = RotasCandidatas[0]
+            MelhorRota = RotasValidas[0]
             
             CompletarCacheDestinos(Sessao, MelhorRota, DadosAeroportos)
             Tipo = 'Direto' if len(MelhorRota) == 1 else 'Conexao'
             return FormatarListaRotas(MelhorRota, DadosAeroportos, Tipo)
                     
-        except nx.NetworkXNoPath:
-            return []
         except Exception as e:
-            print(f"Erro no processamento de rotas: {e}")
+            print(f"Erro grafo: {e}")
+            import traceback
+            traceback.print_exc() # Ajuda a ver onde estourou
             return []
 
     finally:
         Sessao.close()
 
-def CalcularDuracaoRota(ListaVoos):
-    """Calcula a duração total em segundos para ordenação"""
-    if not ListaVoos: return float('inf')
-    
-    # Monta Datetime Saída Origem
-    Primeiro = ListaVoos[0]
-    DtSaida = datetime.combine(Primeiro.DataPartida, Primeiro.HorarioSaida)
-    
-    # Monta Datetime Chegada Destino Final
-    Ultimo = ListaVoos[-1]
-    DtChegada = datetime.combine(Ultimo.DataPartida, Ultimo.HorarioChegada)
-    
-    # CORREÇÃO: Se o horário de chegada for menor que o de saída, virou o dia
-    if Ultimo.HorarioChegada < Ultimo.HorarioSaida:
-        DtChegada += timedelta(days=1)
-    
-    return (DtChegada - DtSaida).total_seconds()
-
-def ValidarCaminhoCronologico(Grafo, Nos, DataMinima):
+def ValidarCaminhoCronologico(Grafo, Nos, DataMinimaAbsoluta):
     """
-    Tenta montar um itinerário válido para uma sequência de aeroportos.
-    Retorna a lista de voos se conseguir conectar tudo.
+    Verifica se existe conexão válida respeitando horários.
+    DataMinimaAbsoluta: Momento exato que a carga está liberada (Data + Hora).
     """
     VoosEscolhidos = []
     
-    # DataReferencia controla a data mínima para o próximo voo
-    DataReferencia = DataMinima
-    
+    # GARANTIA: Converter DataMinimaAbsoluta para datetime se for date
+    # Isso evita o erro: '>' not supported between instances of 'datetime' and 'date'
+    if isinstance(DataMinimaAbsoluta, date) and not isinstance(DataMinimaAbsoluta, datetime):
+        DataReferencia = datetime.combine(DataMinimaAbsoluta, time.min)
+    else:
+        DataReferencia = DataMinimaAbsoluta
+
     for i in range(len(Nos) - 1):
-        Origem = Nos[i]
-        Destino = Nos[i+1]
+        Orig = Nos[i]
+        Dest = Nos[i+1]
         
-        if Destino not in Grafo[Origem]: return None
-        Candidatos = Grafo[Origem][Destino]['voos']
+        # Pega voos do trecho
+        if Dest not in Grafo[Orig]: return None
+        Candidatos = Grafo[Orig][Dest]['voos']
         
         # Ordena cronologicamente
         Candidatos.sort(key=lambda v: (v.DataPartida, v.HorarioSaida))
         
         VooEleito = None
         for Voo in Candidatos:
-            # 1. Primeiro Voo
-            if i == 0:
-                if Voo.DataPartida >= DataReferencia:
-                    VooEleito = Voo
-                    break
+            # Monta datetime de saída deste voo candidato
+            SaidaVoo = datetime.combine(Voo.DataPartida, Voo.HorarioSaida)
             
-            # 2. Conexões
-            else:
-                # Dados do voo anterior (já escolhido)
-                VooAnterior = VoosEscolhidos[-1]
-                ChegadaAnterior = datetime.combine(VooAnterior.DataPartida, VooAnterior.HorarioChegada)
-                
-                # CORREÇÃO: Se chegou no dia seguinte (ex: saiu 23h, chegou 01h)
-                if VooAnterior.HorarioChegada < VooAnterior.HorarioSaida:
-                    ChegadaAnterior += timedelta(days=1)
-                
-                # Dados do voo candidato (Atual)
-                SaidaAtual = datetime.combine(Voo.DataPartida, Voo.HorarioSaida)
-                
-                DifHoras = (SaidaAtual - ChegadaAnterior).total_seconds() / 3600
-                
-                # Regra: Conexão entre 1h e 24h
-                if 1 <= DifHoras <= 24:
+            if i == 0:
+                # PRIMEIRO TRECHO:
+                # O voo deve sair DEPOIS da data/hora de liberação da carga
+                if SaidaVoo > DataReferencia: 
                     VooEleito = Voo
                     break
+            else:
+                # CONEXÃO:
+                # Pega chegada do voo anterior
+                VooAnt = VoosEscolhidos[-1]
+                ChegadaAnt = datetime.combine(VooAnt.DataPartida, VooAnt.HorarioChegada)
+                if VooAnt.HorarioChegada < VooAnt.HorarioSaida: # Virou a noite
+                    ChegadaAnt += timedelta(days=1)
+                
+                # Regra de conexão: Mínimo 1h, Máximo 24h
+                if SaidaVoo >= ChegadaAnt + timedelta(hours=1):
+                    if SaidaVoo <= ChegadaAnt + timedelta(hours=24):
+                        VooEleito = Voo
+                        break
         
         if VooEleito:
             VoosEscolhidos.append(VooEleito)
-            # Atualiza a DataReferencia para a data desse voo, para otimizar o loop seguinte
-            DataReferencia = VooEleito.DataPartida
+            # Atualiza referência (embora não seja usada no próximo loop de conexão, mantém consistência)
+            DataReferencia = datetime.combine(VooEleito.DataPartida, VooEleito.HorarioChegada)
         else:
-            return None # Caminho quebrado
+            return None # Não achou voo viável neste trecho, descarta rota
             
     return VoosEscolhidos
 
-def CompletarCacheDestinos(Sessao, ListaVoos, Cache):
-    IatasFaltantes = set()
-    for Voo in ListaVoos:
-        if Voo.AeroportoDestino not in Cache:
-            IatasFaltantes.add(Voo.AeroportoDestino)
-    if IatasFaltantes:
-        Infos = Sessao.query(Aeroporto).filter(Aeroporto.CodigoIata.in_(IatasFaltantes)).all()
-        for Info in Infos:
-            Cache[Info.CodigoIata] = {'lat': Info.Latitude, 'lon': Info.Longitude, 'nome': Info.NomeAeroporto}
+def CalcularDuracaoRota(ListaVoos):
+    if not ListaVoos: return 99999999
+    
+    def to_dt(d, t): return datetime.combine(d, t)
 
-def FormatarListaRotas(ListaVoos, CacheAeroportos, Tipo):
-    Rotas = []
-    for Voo in ListaVoos:
-        Orig = CacheAeroportos.get(Voo.AeroportoOrigem, {})
-        Dest = CacheAeroportos.get(Voo.AeroportoDestino, {})
+    Primeiro = ListaVoos[0]
+    Ultimo = ListaVoos[-1]
+    
+    Inicio = to_dt(Primeiro.DataPartida, Primeiro.HorarioSaida)
+    Fim = to_dt(Ultimo.DataPartida, Ultimo.HorarioChegada)
+    
+    if Ultimo.HorarioChegada < Ultimo.HorarioSaida:
+        Fim += timedelta(days=1)
         
-        Sai = Voo.HorarioSaida.strftime('%H:%M') if Voo.HorarioSaida else '--:--'
-        Che = Voo.HorarioChegada.strftime('%H:%M') if Voo.HorarioChegada else '--:--'
+    return (Fim - Inicio).total_seconds()
 
-        Rotas.append({
+def CompletarCacheDestinos(Sessao, ListaVoos, Cache):
+    Iatas = set()
+    for v in ListaVoos:
+        Iatas.add(v.AeroportoOrigem)
+        Iatas.add(v.AeroportoDestino)
+    
+    Faltantes = [i for i in Iatas if i not in Cache]
+    if Faltantes:
+        Aeroportos = Sessao.query(Aeroporto).filter(Aeroporto.CodigoIata.in_(Faltantes)).all()
+        for a in Aeroportos:
+            Cache[a.CodigoIata] = {'lat': a.Latitude, 'lon': a.Longitude, 'nome': a.NomeAeroporto}
+
+def FormatarListaRotas(ListaVoos, Cache, Tipo):
+    Resultado = []
+    for Voo in ListaVoos:
+        Orig = Cache.get(Voo.AeroportoOrigem, {})
+        Dest = Cache.get(Voo.AeroportoDestino, {})
+        
+        Resultado.append({
             'tipo_resultado': Tipo,
+            'cia': Voo.CiaAerea,
             'voo': Voo.NumeroVoo,
-            'cia': Voo.CiaAerea.upper().strip(),
             'data': Voo.DataPartida.strftime('%d/%m/%Y'),
-            'horario_saida': Sai,
-            'horario_chegada': Che,
-            'origem': {
-                'iata': Voo.AeroportoOrigem, 
-                'nome': Orig.get('nome', Voo.AeroportoOrigem), 
-                'lat': Orig.get('lat'), 'lon': Orig.get('lon')
-            },
-            'destino': {
-                'iata': Voo.AeroportoDestino, 
-                'nome': Dest.get('nome', Voo.AeroportoDestino), 
-                'lat': Dest.get('lat'), 'lon': Dest.get('lon')
-            }
+            'horario_saida': Voo.HorarioSaida.strftime('%H:%M'),
+            'horario_chegada': Voo.HorarioChegada.strftime('%H:%M'),
+            'origem': {'iata': Voo.AeroportoOrigem, 'nome': Orig.get('nome'), 'lat': Orig.get('lat'), 'lon': Orig.get('lon')},
+            'destino': {'iata': Voo.AeroportoDestino, 'nome': Dest.get('nome'), 'lat': Dest.get('lat'), 'lon': Dest.get('lon')}
         })
-    return Rotas
+    return Resultado

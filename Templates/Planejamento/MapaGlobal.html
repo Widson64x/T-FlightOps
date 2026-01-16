@@ -1,0 +1,209 @@
+{% extends "Base.html" %}
+
+{% block titulo %}Torre de Controle Global | FlightOps{% endblock %}
+
+{% block conteudo %}
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+    /* Layout Fixo (Sidebar + Mapa) */
+    .page-grid {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 20px;
+        height: calc(100vh - 140px);
+        min-height: 550px;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Sidebar */
+    .painel {
+        background: #fff; border: 1px solid #dee2e6; border-radius: 8px;
+        display: flex; flex-direction: column; overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .painel-top { padding: 20px; background: #f8f9fa; border-bottom: 1px solid #eee; }
+    .painel-content { padding: 0; flex: 1; overflow-y: auto; background: #fdfdfd; }
+
+    /* Lista de CTCs */
+    .ctc-item {
+        padding: 15px 20px; border-bottom: 1px solid #eee; cursor: pointer;
+        transition: all 0.2s; border-left: 4px solid transparent;
+    }
+    .ctc-item:hover { background: #f1f8ff; }
+    
+    .ctc-item.ativo {
+        background: #fff; border-left-color: #0d6efd;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 2; position: relative;
+    }
+
+    .ctc-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .badge-ctc { background: #343a40; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+    .valor-ctc { color: #198754; font-weight: bold; font-size: 0.9rem; }
+    
+    .rota-texto { font-size: 0.85rem; color: #555; display: flex; align-items: center; gap: 5px; }
+    .seta-rota { color: #aaa; font-size: 0.8rem; }
+
+    /* Botão de Ação */
+    .area-acao { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eee; animation: fadeIn 0.3s; }
+    .ctc-item.ativo .area-acao { display: block; }
+
+    .btn-planejar {
+        display: block; width: 100%; text-align: center;
+        background: #0d6efd; color: white; text-decoration: none;
+        padding: 8px; border-radius: 4px; font-weight: 600; font-size: 0.9rem;
+        transition: 0.2s;
+    }
+    .btn-planejar:hover { background: #0b5ed7; }
+
+    /* Mapa */
+    #map-wrapper {
+        border-radius: 8px; border: 1px solid #ced4da;
+        position: relative; height: 100%; width: 100%; overflow: hidden;
+        background: #e9ecef;
+    }
+    #map { width: 100%; height: 100%; z-index: 1; }
+
+    /* Estados Visuais */
+    .rota-fantasma { opacity: 0.1 !important; transition: opacity 0.5s; }
+    .rota-focada { opacity: 1 !important; stroke-width: 4px !important; z-index: 999; }
+    .marker-fantasma { opacity: 0.2 !important; }
+    .marker-focado { opacity: 1 !important; z-index: 1000 !important; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+
+<div class="page-grid">
+    
+    <div class="painel">
+        <div class="painel-top">
+            <h2 style="margin:0 0 5px 0; color:#212529;">Torre de Controle</h2>
+            <div style="font-size:0.85rem; color:#666;">
+                {{ Dados|length }} cargas aéreas em monitoramento
+            </div>
+        </div>
+
+        <div class="painel-content">
+            {% for d in Dados %}
+            <div class="ctc-item" id="item-{{ d.id }}" onclick="FocarRota('{{ d.id }}')">
+                <div class="ctc-header">
+                    <span class="badge-ctc">{{ d.filial }}-{{ d.serie }}-{{ d.ctc }}</span>
+                    <span class="valor-ctc">R$ {{ d.valor }}</span>
+                </div>
+                
+                <div class="rota-texto">
+                    {{ d.origem.nome }} <span class="seta-rota">➝</span> {{ d.destino.nome }}
+                </div>
+                
+                <div style="font-size:0.75rem; color:#888; margin-top:4px;">
+                    Peso: <b>{{ d.peso }} kg</b> • Via: <b>{{ d.aero_origem.iata }} ➝ {{ d.aero_destino.iata }}</b>
+                </div>
+
+                <div class="area-acao">
+                    <a href="{{ url_for('Planejamento.MontarPlanejamento', filial=d.filial, serie=d.serie, ctc=d.ctc) }}" class="btn-planejar">
+                        🗺️ Abrir no Planejador
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+            
+            {% if not Dados %}
+            <div style="padding:40px; text-align:center; color:#999;">Nenhuma carga localizada.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div id="map-wrapper">
+        <div id="map"></div>
+    </div>
+
+</div>
+
+<script>
+    const dados = {{ Dados | tojson | safe }};
+    const camadas = {}; 
+    let idAtivo = null;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        var map = L.map('map', {zoomControl: false}).setView([-14.2, -51.9], 4);
+        L.control.zoom({position: 'topright'}).addTo(map);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: 'FlightOps', maxZoom: 18
+        }).addTo(map);
+
+        const iconeCaminhao = L.divIcon({html: '<div style="font-size:16px;">🚛</div>', className: 'dummy', iconSize:[20,20]});
+
+        dados.forEach(d => {
+            const grupo = L.featureGroup();
+            const pOrig = [d.origem.lat, d.origem.lon];
+            const pDest = [d.destino.lat, d.destino.lon];
+            const pAeroO = [d.aero_origem.lat, d.aero_origem.lon];
+            const pAeroD = [d.aero_destino.lat, d.aero_destino.lon];
+
+            // Road -> Air -> Road
+            const l1 = L.polyline([pOrig, pAeroO], { color: '#888', weight: 1, dashArray: '3, 3' }).addTo(grupo);
+            const l2 = L.polyline([pAeroO, pAeroD], { color: '#0d6efd', weight: 2, opacity: 0.6 }).addTo(grupo);
+            const l3 = L.polyline([pAeroD, pDest], { color: '#888', weight: 1, dashArray: '3, 3' }).addTo(grupo);
+
+            const m1 = L.marker(pOrig, {icon: iconeCaminhao}).bindTooltip(`CTC ${d.ctc}`, {direction:'top'}).addTo(grupo);
+
+            grupo.on('click', () => FocarRota(d.id));
+            grupo.addTo(map);
+            
+            camadas[d.id] = { grupo, linhas: [l1, l2, l3], markers: [m1] };
+        });
+
+        if (dados.length > 0) {
+            const groupAll = L.featureGroup(Object.values(camadas).map(c => c.grupo));
+            map.fitBounds(groupAll.getBounds(), {padding: [50, 50]});
+        }
+    });
+
+    window.FocarRota = function(id) {
+        if (idAtivo === id) { ResetarFoco(); return; }
+        idAtivo = id;
+
+        // Sidebar
+        document.querySelectorAll('.ctc-item').forEach(el => el.classList.remove('ativo'));
+        const item = document.getElementById('item-' + id);
+        if (item) {
+            item.classList.add('ativo');
+            item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Mapa
+        Object.keys(camadas).forEach(key => {
+            const obj = camadas[key];
+            const ehAlvo = (key === id);
+
+            obj.linhas.forEach(l => {
+                if (ehAlvo) {
+                    l.setStyle({ opacity: 1, weight: 4, color: l.options.color === '#888' ? '#444' : '#0d6efd' }); 
+                    l.bringToFront();
+                } else {
+                    l.setStyle({ opacity: 0.1, weight: 1 });
+                }
+            });
+
+            obj.markers.forEach(m => {
+                m.setOpacity(ehAlvo ? 1 : 0.2);
+                if(ehAlvo) m.setZIndexOffset(1000);
+            });
+        });
+    };
+
+    function ResetarFoco() {
+        idAtivo = null;
+        document.querySelectorAll('.ctc-item').forEach(el => el.classList.remove('ativo'));
+        Object.values(camadas).forEach(obj => {
+            obj.linhas[0].setStyle({ opacity: 1, weight: 1, color: '#888' });
+            obj.linhas[1].setStyle({ opacity: 0.6, weight: 2, color: '#0d6efd' });
+            obj.linhas[2].setStyle({ opacity: 1, weight: 1, color: '#888' });
+            obj.markers.forEach(m => { m.setOpacity(1); m.setZIndexOffset(0); });
+        });
+    }
+</script>
+{% endblock %}
