@@ -78,7 +78,7 @@ app.register_blueprint(AuthBp, url_prefix=f'{Prefix}/auth')
 app.register_blueprint(MalhaBp, url_prefix=Prefix)
 app.register_blueprint(AeroportoBp, url_prefix=Prefix)
 app.register_blueprint(CidadeBp, url_prefix=Prefix)
-app.register_blueprint(PlanejamentoBp, url_prefix=Prefix)
+app.register_blueprint(PlanejamentoBp, url_prefix=f'{Prefix}/planejamento')
 
 # Rota principal do Dashboard com o prefixo
 @app.route(f'{Prefix}/')
