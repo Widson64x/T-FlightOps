@@ -1,8 +1,7 @@
 from sqlalchemy import distinct
 from Conexoes import ObterSessaoPostgres
-from Models.POSTGRES.Cidade import Cidade
-from Models.POSTGRES.Aeroporto import Aeroporto
-# IMPORTANTE: Importar RemessaMalha para fazer o Join
+from Models.POSTGRES.Cidade import Cidade, RemessaCidade
+from Models.POSTGRES.Aeroporto import Aeroporto, RemessaAeroportos
 from Models.POSTGRES.MalhaAerea import VooMalha, RemessaMalha 
 from Utils.Geometria import Haversine
 from Utils.Texto import NormalizarTexto
@@ -15,8 +14,10 @@ def BuscarCoordenadasCidade(NomeCidade, Uf):
         # Normalização para evitar erros de acento (Itajaí vs Itajai)
         NomeBusca = NormalizarTexto(NomeCidade)
         UfBusca = NormalizarTexto(Uf)
-
-        CidadesDoEstado = Sessao.query(Cidade).filter(Cidade.Uf == UfBusca).all()
+        # Buscar todas as cidades do estado
+        CidadesDoEstado = Sessao.query(Cidade)\
+        .filter(RemessaCidade.Ativo == True) \
+        .filter(Cidade.Uf == UfBusca).all()
         
         for c in CidadesDoEstado:
             NomeBanco = NormalizarTexto(c.NomeCidade)
@@ -56,7 +57,9 @@ def BuscarAeroportoMaisProximo(Lat, Lon):
                 Aeroporto.Latitude, 
                 Aeroporto.Longitude, 
                 Aeroporto.NomeAeroporto
-            ).filter(
+            ).join(RemessaAeroportos)\
+            .filter(RemessaAeroportos.Ativo == True)\
+            .filter(
                 Aeroporto.Latitude != None,
                 Aeroporto.CodigoIata.in_(ListaIatasAtivos)
             ).all()

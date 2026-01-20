@@ -138,8 +138,7 @@ def ProcessarMalhaFinal(CaminhoArquivo, DataRef, NomeOriginal, Usuario, TipoAcao
     finally:
         Sessao.close()
 
-# --- BUSCA INTELIGENTE E ROTEAMENTO (CORRIGIDA) ---
-
+# --- BUSCA INTELIGENTE E ROTEAMENTO (ATUALIZADA) ---
 def BuscarRotasInteligentes(DataInicio, DataFim, OrigemIata=None, DestinoIata=None):
     Sessao = ObterSessaoPostgres()
     try:
@@ -150,11 +149,10 @@ def BuscarRotasInteligentes(DataInicio, DataFim, OrigemIata=None, DestinoIata=No
         OrigemIata = OrigemIata.upper().strip() if OrigemIata else None
         DestinoIata = DestinoIata.upper().strip() if DestinoIata else None
         
-        # CORREÇÃO PRINCIPAL: JOIN COM REMESSA E FILTRO ATIVO=TRUE
         VoosDB = Sessao.query(VooMalha)\
             .join(RemessaMalha)\
             .filter(
-                RemessaMalha.Ativo == True,  # <--- SÓ O QUE É ATIVO
+                RemessaMalha.Ativo == True,
                 VooMalha.DataPartida >= FiltroDataInicio, 
                 VooMalha.DataPartida <= FiltroDataFim + timedelta(days=1)
             ).all()
@@ -166,10 +164,9 @@ def BuscarRotasInteligentes(DataInicio, DataFim, OrigemIata=None, DestinoIata=No
         # 3. Monta o Grafo
         for Voo in VoosDB:
             if not (OrigemIata and DestinoIata):
-                # Se for busca genérica (sem origem/destino), adiciona na lista simples
                 if (not OrigemIata or Voo.AeroportoOrigem == OrigemIata) and \
                    (not DestinoIata or Voo.AeroportoDestino == DestinoIata):
-                       ListaGeral.append(Voo)
+                        ListaGeral.append(Voo)
             
             # Adiciona ao Grafo
             if G.has_edge(Voo.AeroportoOrigem, Voo.AeroportoDestino):
@@ -177,7 +174,6 @@ def BuscarRotasInteligentes(DataInicio, DataFim, OrigemIata=None, DestinoIata=No
             else:
                 G.add_edge(Voo.AeroportoOrigem, Voo.AeroportoDestino, voos=[Voo])
 
-        # Se não tem origem/destino, retorna lista simples
         if not (OrigemIata and DestinoIata):
             CompletarCacheDestinos(Sessao, ListaGeral, DadosAeroportos)
             return FormatarListaRotas(ListaGeral[:2000], DadosAeroportos, 'Geral')
@@ -200,8 +196,19 @@ def BuscarRotasInteligentes(DataInicio, DataFim, OrigemIata=None, DestinoIata=No
             
             if not RotasValidas: return []
 
-            # Ordena por: 1) Menor Duração, 2) Menos Escalas
-            RotasValidas.sort(key=lambda r: (CalcularDuracaoRota(r), len(r)))
+            # CRITÉRIOS DE ORDENAÇÃO ATUALIZADOS:
+            # 1. Número de trocas de CIA (Menor é melhor) - Prioridade Máxima
+            # 2. Duração Total (Menor é melhor)
+            # 3. Número de Escalas (Menor é melhor)
+            
+            def ContarTrocasCia(Rota):
+                trocas = 0
+                for i in range(len(Rota) - 1):
+                    if Rota[i].CiaAerea != Rota[i+1].CiaAerea:
+                        trocas += 1
+                return trocas
+
+            RotasValidas.sort(key=lambda r: (ContarTrocasCia(r), CalcularDuracaoRota(r), len(r)))
 
             MelhorRota = RotasValidas[0]
             
@@ -218,8 +225,7 @@ def BuscarRotasInteligentes(DataInicio, DataFim, OrigemIata=None, DestinoIata=No
 
 def ValidarCaminhoCronologico(Grafo, Nos, DataMinimaAbsoluta):
     """
-    Verifica se existe conexão válida respeitando horários.
-    DataMinimaAbsoluta: Momento exato que a carga está liberada (Data + Hora).
+    Verifica se existe conexão válida respeitando horários E PRIORIZANDO MESMA CIA AÉREA.
     """
     VoosEscolhidos = []
     
@@ -232,15 +238,32 @@ def ValidarCaminhoCronologico(Grafo, Nos, DataMinimaAbsoluta):
         Orig = Nos[i]
         Dest = Nos[i+1]
         
-        # Pega voos do trecho
         if Dest not in Grafo[Orig]: return None
-        Candidatos = Grafo[Orig][Dest]['voos']
+        Candidatos = Grafo[Orig][Dest]['voos'][:] # Copia a lista para não alterar o grafo original
         
-        # Ordena cronologicamente
+        # Ordena cronologicamente por padrão
         Candidatos.sort(key=lambda v: (v.DataPartida, v.HorarioSaida))
         
+        # --- LÓGICA DE PRIORIZAÇÃO DE CIA AÉREA ---
+        CandidatosOrdenados = []
+        
+        # Se já temos um voo escolhido (estamos numa conexão), olhamos a CIA do anterior
+        if VoosEscolhidos:
+            CiaAnterior = VoosEscolhidos[-1].CiaAerea
+            
+            # Divide em dois grupos
+            MesmaCia = [v for v in Candidatos if v.CiaAerea == CiaAnterior]
+            OutraCia = [v for v in Candidatos if v.CiaAerea != CiaAnterior]
+            
+            # Prioridade absoluta: Tenta todos da mesma CIA primeiro.
+            # Se encontrar um válido na lista 'MesmaCia', o loop para e nem olha 'OutraCia'.
+            CandidatosOrdenados = MesmaCia + OutraCia
+        else:
+            # Primeiro trecho da viagem: usa a ordenação padrão de horário
+            CandidatosOrdenados = Candidatos
+
         VooEleito = None
-        for Voo in Candidatos:
+        for Voo in CandidatosOrdenados:
             SaidaVoo = datetime.combine(Voo.DataPartida, Voo.HorarioSaida)
             
             if i == 0:
@@ -250,8 +273,8 @@ def ValidarCaminhoCronologico(Grafo, Nos, DataMinimaAbsoluta):
                     break
             else:
                 # CONEXÃO
-                VooAnt = VoosEscolhidos[-1] # Último voo escolhido até agora
-                ChegadaAnt = datetime.combine(VooAnt.DataPartida, VooAnt.HorarioChegada) # Chegada do voo anterior
+                VooAnt = VoosEscolhidos[-1]
+                ChegadaAnt = datetime.combine(VooAnt.DataPartida, VooAnt.HorarioChegada)
                 if VooAnt.HorarioChegada < VooAnt.HorarioSaida: # Virou a noite
                     ChegadaAnt += timedelta(days=1)
                 
@@ -259,7 +282,7 @@ def ValidarCaminhoCronologico(Grafo, Nos, DataMinimaAbsoluta):
                 if SaidaVoo >= ChegadaAnt + timedelta(hours=1):
                     if SaidaVoo <= ChegadaAnt + timedelta(hours=24):
                         VooEleito = Voo
-                        break
+                        break # Encontrou o primeiro válido na ordem de prioridade (Mesma Cia -> Outra Cia)
         
         if VooEleito:
             VoosEscolhidos.append(VooEleito)
@@ -321,7 +344,6 @@ def ObterTotalVoosData(DataRef):
     """
     Sessao = ObterSessaoPostgres()
     try:
-        # Garante que é apenas a data (sem hora)
         DataFiltro = DataRef.date() if isinstance(DataRef, datetime) else DataRef
         
         Total = Sessao.query(func.count(VooMalha.Id))\
