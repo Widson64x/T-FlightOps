@@ -281,10 +281,15 @@
                         <th style="width: 120px;">CT-e / Doc</th>
                         <th style="width: 100px;">Emissão</th>
                         <th style="text-align: center; width: 100px;">Prioridade</th>
+                        <th style="text-align: center; width: 100px;">Tipo de Carga</th>
+                        <th style="text-align: center; width: 100px;">Espécie</th>
+                        <th style="text-align: center; width: 100px;">Unid. LastMile</th>
                         <th style="width: 140px;">Rota</th>
                         <th>Remetente</th>
                         <th>Destinatário</th>
+                        <th style="text-align: center; width: 100px;">NFs</th>
                         <th style="text-align: right;">Vol.</th>
+                        <th style="text-align: right;">Valor Mercadoria</th>
                         <th style="text-align: right;">Peso Tax.</th>
                         <th style="text-align: right;">Frete Total</th>
                     </tr>
@@ -376,6 +381,9 @@
                     <td style="text-align:center;">
                         <span class="badge-prio ${badgeClass}">${r.prioridade || 'NORMAL'}</span>
                     </td>
+                    <td style="text-align:center;">${r.natureza}</td>
+                    <td style="text-align:center;">${r.especie}</td>
+                    <td style="text-align:center; font-weight:600;">${r.unid_lastmile}</td>
                     <td>
                         <div class="col-route">
                             ${r.origem} <i class="ph-bold ph-arrow-right"></i> ${r.destino}
@@ -383,8 +391,9 @@
                     </td>
                     <td style="font-size: 0.85rem;" title="${r.remetente}">${r.remetente.substring(0,20)}...</td>
                     <td style="font-size: 0.85rem;" title="${r.destinatario}">${r.destinatario.substring(0,20)}...</td>
-                    
+                    <td style="text-align:center; font-weight:600;">${r.nfs}</td>
                     <td style="text-align:right;">${r.volumes}</td>
+                    <td style="text-align:right; font-weight:600;">${r.val_mercadoria.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}</td>
                     <td style="text-align:right; font-weight:600;">${r.peso_taxado.toLocaleString('pt-BR')} kg</td>
                     <td class="col-money" style="color: var(--success-color);">${r.frete_total}</td>
                 </tr>

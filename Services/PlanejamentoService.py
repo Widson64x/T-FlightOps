@@ -44,6 +44,7 @@ def BuscarCtcsAereoHoje():
                 'prioridade': to_str(c.prioridade),
                 'origem': f"{to_str(c.cidade_orig)}/{to_str(c.uf_orig)}",
                 'destino': f"{to_str(c.cidade_dest)}/{to_str(c.uf_dest)}",
+                'unid_lastmile': to_str(c.rotafilialdest),
                 'remetente': to_str(c.remet_nome),
                 'destinatario': to_str(c.dest_nome),
                 'nfs': to_str(c.nfs),
@@ -64,7 +65,7 @@ def BuscarCtcsAereoHoje():
         Sessao.close()
 
 from sqlalchemy import or_
-
+# Captura detalhes completos do CTC a partir da Filial, Série e Número, para usar no planejamento
 def ObterCtcDetalhado(Filial, Serie, Numero):
     Sessao = ObterSessaoSqlServer()
     try:
@@ -85,7 +86,7 @@ def ObterCtcDetalhado(Filial, Serie, Numero):
             CtcEncontrado = Sessao.query(Ctc).filter(
                 Ctc.filial == f,
                 Ctc.seriectc == s,
-                Ctc.filialctc == n.lstrip('0') # Remove zeros do início
+                Ctc.filialctc == n.lstrip('0') # Remove zeros do início, remove caracteres do lado esquerdo
             ).first()
 
         # Se ainda não achar, tenta adicionar zeros (alguns sistemas padronizam 10 dígitos)
@@ -106,6 +107,7 @@ def ObterCtcDetalhado(Filial, Serie, Numero):
         # 2. Processa a Hora
         HoraFinal = time(0, 0)
         if CtcEncontrado.hora:
+            # Processa a hora mesmo que esteja em formatos estranhos, e ajusta para 4 dígitos
             try:
                 h_str = str(CtcEncontrado.hora).strip().replace(':', '')
                 h_str = h_str.zfill(4) 
@@ -116,8 +118,8 @@ def ObterCtcDetalhado(Filial, Serie, Numero):
         # 3. Combina
         DataEmissaoReal = datetime.combine(DataBase.date(), HoraFinal)
         
-        # 4. Margem
-        DataBuscaVoos = DataEmissaoReal + timedelta(hours=3)
+        # 4. Margem de 10 horas para busca de voos
+        DataBuscaVoos = DataEmissaoReal + timedelta(hours=10)
 
         return {
             'filial': CtcEncontrado.filial,

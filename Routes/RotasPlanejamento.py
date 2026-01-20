@@ -20,7 +20,7 @@ def ApiCtcsHoje():
     Dados = BuscarCtcsAereoHoje()
     return jsonify(Dados)
 
-@PlanejamentoBp.route('/montar/<string:filial>/<string:serie>/<string:ctc>')
+@PlanejamentoBp.route('/Montar/<string:filial>/<string:serie>/<string:ctc>')
 @login_required
 def MontarPlanejamento(filial, serie, ctc):
     
@@ -42,13 +42,20 @@ def MontarPlanejamento(filial, serie, ctc):
     # 4. Busca
     RotasSugeridas = []
     if AeroOrigem and AeroDestino:
-        # AQUI O SEGREDO: Usamos a data calculada (+3h) para a busca
+        """
+            AQUI O SEGREDO: Usamos a data calculada onde temos a hora real + margem (10 horas após a Emissão),
+            conforme implementado em Services/PlanejamentoService.py para fazer A busca de rotas inteligentes a 
+            partir dessa data/hora. Isso garante que não traremos voos que já partiram. E garantimos que a busca 
+            sempre trará resultados, aumentando o intervalo de dias se necessário (3, 10, 30).
+        """
+
         DataInicioBusca = DadosCtc['data_busca'] 
+        print(f"🔍 Buscando rotas inteligentes de {AeroOrigem['iata']} para {AeroDestino['iata']} a partir de {DataInicioBusca}...")
         
-        for Dias in [3, 10, 30]:
+        for Dias in [3, 10, 30]: # Busca progressiva, 3 dias, 10 dias, 30 dias, se necessário
             DataLimite = DataInicioBusca + timedelta(days=Dias)
             RotasSugeridas = BuscarRotasInteligentes(
-                DataInicioBusca, # <--- VAI FILTRAR VOOS APÓS 12:22
+                DataInicioBusca, # Vai dar Data/Hora calculada de Emissão do CTC + 10h
                 DataLimite, 
                 AeroOrigem['iata'], AeroDestino['iata']
             )
@@ -60,7 +67,7 @@ def MontarPlanejamento(filial, serie, ctc):
                            AeroOrigem=AeroOrigem, AeroDestino=AeroDestino,
                            Rotas=RotasSugeridas)
     
-@PlanejamentoBp.route('/mapa-global')
+@PlanejamentoBp.route('/Mapa-Global')
 @login_required
 def MapaGlobal():
     # 1. Pega todos os CTCs aéreos de hoje
@@ -88,8 +95,8 @@ def MapaGlobal():
                 if AeroO and AeroD:
                     DadosMapa.append({
                         'id': c['id_unico'],
-                        'filial': c['filial'], # <--- IMPORTANTE
-                        'serie': c['serie'],   # <--- AQUI ESTÁ A CORREÇÃO
+                        'filial': c['filial'],
+                        'serie': c['serie'],
                         'ctc': c['ctc'],
                         'valor': c['val_mercadoria'],
                         'peso': c['peso_taxado'],
