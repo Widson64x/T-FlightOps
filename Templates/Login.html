@@ -3,158 +3,445 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | FlightOps</title>
+    <title>FlightOps | Terminal Access</title>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='CSS/Temas.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='CSS/Global.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;800&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 
     <style>
-        /* --- CSS Específico do Login --- */
-        body {
-            overflow: hidden; /* Impede barras de rolagem desnecessárias */
+        /* --- VARIÁVEIS & RESET --- */
+        :root {
+            --primary: #0066cc;
+            --primary-light: #4d94ff;
+            --sky-top: #f0f4f8;
+            --sky-bottom: #d9e2ec;
+            --glass: rgba(255, 255, 255, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.9);
+            --text-dark: #102a43;
+            --text-gray: #627d98;
+            --shadow-card: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
         }
 
-        .login-container {
+        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
+
+        body {
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%);
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            width: 100vw;
-            /* Gradiente suave e profissional */
-            background: linear-gradient(135deg, var(--cor-fundo-principal) 0%, var(--cor-borda) 100%);
             position: relative;
         }
 
-        /* Efeito de fundo sutil (Opcional) */
-        .login-bg-decoration {
+        /* --- CAMADA 1: RADAR DE FUNDO --- */
+        .radar-container {
             position: absolute;
-            width: 100%; height: 100%;
-            background: radial-gradient(circle at 50% 0%, rgba(0, 86, 179, 0.08) 0%, transparent 70%);
+            width: 100vw; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 0; opacity: 0.4;
             pointer-events: none;
         }
+        
+        .radar-circle {
+            position: absolute;
+            border: 1px dashed rgba(0, 102, 204, 0.1);
+            border-radius: 50%;
+        }
+        .rc-1 { width: 400px; height: 400px; }
+        .rc-2 { width: 800px; height: 800px; }
+        .rc-3 { width: 1200px; height: 1200px; }
 
-        .login-card {
-            background-color: var(--cor-fundo-painel);
-            padding: 45px;
-            border-radius: 16px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1); /* Sombra mais elegante */
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            border: 1px solid var(--cor-borda);
-            position: relative;
-            z-index: 10;
+        .radar-sweep {
+            position: absolute;
+            width: 50vw; height: 50vw;
+            background: conic-gradient(from 0deg, transparent 0%, transparent 80%, rgba(0, 102, 204, 0.05) 100%);
+            border-radius: 50%;
+            animation: radarSpin 10s linear infinite;
+        }
+        @keyframes radarSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        /* --- CAMADA 2: OBJETOS VOADORES (JS) --- */
+        #sky-traffic {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1; pointer-events: none;
         }
 
-        .login-logo {
-            font-size: 2.2rem;
-            font-weight: 800;
-            color: var(--cor-primaria);
-            margin-bottom: 5px;
-            display: block;
-            letter-spacing: -0.5px;
-        }
-
-        .login-subtitle {
-            color: var(--cor-texto-secundario);
-            margin-bottom: 35px;
-            font-size: 0.95rem;
-            font-weight: 500;
-        }
-
-        .form-group {
-            text-align: left;
-            margin-bottom: 20px;
-        }
-
-        label {
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 8px;
-            display: block;
-            color: var(--cor-texto-principal);
-        }
-
-        /* Estilização dos Inputs (Necessário pois o Global.css foca em Layout agora) */
-        input[type="text"], 
-        input[type="password"] {
-            width: 100%;
-            padding: 12px 15px;
-            border: 1px solid var(--cor-borda);
-            border-radius: 8px;
-            font-size: 0.95rem;
-            color: var(--cor-texto-principal);
-            background-color: var(--cor-fundo-principal);
-            transition: all 0.2s ease;
-            outline: none;
-        }
-
-        input:focus {
-            border-color: var(--cor-primaria);
-            background-color: var(--cor-fundo-painel);
-            box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.15); /* Anel de foco */
-        }
-
-        /* Ajuste no botão para ficar mais alto e chamativo */
-        .btn-primario {
-            width: 100%;
-            padding: 14px;
-            font-size: 1rem;
-            margin-top: 10px;
-            font-weight: 600;
+        .plane-obj {
+            position: absolute;
+            color: var(--primary);
+            opacity: 0.6;
+            filter: drop-shadow(0 10px 5px rgba(0,0,0,0.1));
+            transition: transform 0.1s linear;
+            will-change: transform, left, top;
         }
         
-        .rodape-login {
-            margin-top: 30px;
-            font-size: 0.75rem;
-            color: var(--cor-texto-secundario);
-            opacity: 0.8;
-            border-top: 1px solid var(--cor-borda);
-            padding-top: 20px;
+        .cloud-obj {
+            position: absolute;
+            background: #fff;
+            border-radius: 50px;
+            filter: blur(10px);
+            opacity: 0.7;
+            z-index: 1;
         }
+
+        /* --- CAMADA 3: LOGIN CARD --- */
+        .login-interface {
+            position: relative;
+            z-index: 10;
+            width: 420px;
+            padding: 50px 40px;
+            background: var(--glass);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-radius: 30px;
+            border: 2px solid var(--glass-border);
+            box-shadow: var(--shadow-card);
+            transform: translateY(0);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .login-interface:hover {
+            transform: translateY(-5px) scale(1.01);
+            box-shadow: 0 35px 60px -15px rgba(0, 102, 204, 0.2);
+        }
+
+        /* Header Logo */
+        .brand-header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .logo-icon-wrapper {
+            width: 80px; height: 80px;
+            background: linear-gradient(135deg, #0066cc, #004494);
+            border-radius: 20px;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 15px;
+            color: white;
+            font-size: 2.5rem;
+            box-shadow: 0 10px 20px rgba(0, 102, 204, 0.3);
+            animation: floatLogo 6s ease-in-out infinite;
+        }
+
+        @keyframes floatLogo { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+        .brand-header h1 {
+            font-family: 'Exo 2', sans-serif;
+            font-weight: 800;
+            font-size: 1.8rem;
+            color: var(--text-dark);
+            letter-spacing: -0.5px;
+        }
+        .brand-header span {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-gray);
+            font-weight: 600;
+        }
+
+        /* Inputs Estilizados */
+        .input-group {
+            position: relative;
+            margin-bottom: 25px;
+        }
+
+        .input-label {
+            position: absolute;
+            left: 16px; top: -10px;
+            background: rgba(255,255,255,0.9);
+            padding: 0 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-gray);
+            border-radius: 4px;
+            transition: 0.3s;
+            z-index: 2;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 16px 45px 16px 20px;
+            border: 2px solid #e1e7ef;
+            background: rgba(255,255,255,0.6);
+            border-radius: 12px;
+            font-size: 1rem;
+            color: var(--text-dark);
+            transition: all 0.3s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            background: #fff;
+            box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.1);
+        }
+        .form-control:focus + .input-icon { color: var(--primary); }
+        .form-control:focus ~ .input-label { color: var(--primary); }
+
+        .input-icon {
+            position: absolute;
+            right: 15px; top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2rem;
+            color: #cbd5e0;
+            transition: 0.3s;
+            cursor: pointer;
+        }
+        .input-icon:hover { color: var(--text-gray); }
+
+        /* Botão de Decolagem */
+        .btn-takeoff {
+            width: 100%;
+            height: 60px;
+            border: none;
+            border-radius: 12px;
+            background: var(--primary);
+            color: white;
+            font-family: 'Exo 2', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s;
+            box-shadow: 0 10px 20px rgba(0, 102, 204, 0.25);
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+
+        .btn-takeoff:hover {
+            background: #0052a3;
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(0, 102, 204, 0.4);
+        }
+
+        /* Efeito de Pista no Botão */
+        .runway-lights {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%; height: 4px;
+            background: repeating-linear-gradient(90deg, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 10px, transparent 10px, transparent 20px);
+            animation: runwayMove 1s linear infinite;
+            opacity: 0; transition: 0.3s;
+        }
+        .btn-takeoff:hover .runway-lights { opacity: 1; }
+        
+        @keyframes runwayMove { from { background-position: 0 0; } to { background-position: 20px 0; } }
+
+        .plane-takeoff-icon {
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .btn-takeoff:hover .plane-takeoff-icon {
+            transform: translateX(100px) scale(0) rotate(-45deg);
+        }
+
+        /* Mensagens de Erro */
+        .alert-area { margin-bottom: 20px; }
+        .alert {
+            padding: 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+            display: flex; align-items: center; gap: 10px;
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .alert-error { background: #ffe3e3; color: #c92a2a; border-left: 4px solid #c92a2a; }
+        .alert-success { background: #d3f9d8; color: #2b8a3e; border-left: 4px solid #2b8a3e; }
+
+        /* Rodapé */
+        .footer {
+            margin-top: 30px; text-align: center;
+            font-size: 0.75rem; color: var(--text-gray);
+            border-top: 1px solid rgba(0,0,0,0.05); padding-top: 20px;
+        }
+
+        /* Animação de Saída (Ao logar) */
+        .card-exit-anim {
+            animation: cardFlyAway 0.8s forwards ease-in;
+        }
+        @keyframes cardFlyAway {
+            0% { transform: scale(1); opacity: 1; }
+            40% { transform: scale(0.9) translateY(20px); opacity: 1; }
+            100% { transform: translateY(-800px) scale(0.5); opacity: 0; }
+        }
+
     </style>
 </head>
 <body>
 
-    <div class="login-container">
-        <div class="login-bg-decoration"></div> <div class="login-card">
-            <span class="login-logo">✈️ FlightOps</span>
-            <p class="login-subtitle">Gestão da Malha e Controle de Voos</p>
+    <div class="radar-container">
+        <div class="radar-circle rc-1"></div>
+        <div class="radar-circle rc-2"></div>
+        <div class="radar-circle rc-3"></div>
+        <div class="radar-sweep"></div>
+    </div>
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-              {% if messages %}
-                {% for category, message in messages %}
-                  <div class="alert alert-{{ category }}" style="text-align: left;">{{ message }}</div>
-                {% endfor %}
-              {% endif %}
-            {% endwith %}
+    <div id="sky-traffic"></div>
 
-            <form method="POST">
-                <div class="form-group">
-                    <label for="username">Usuário de Rede</label>
-                    <input type="text" id="username" name="username" placeholder="Ex: joao.silva" required autofocus>
-                </div>
-                
-                <div class="form-group">
-                    <label for="password">Senha</label>
-                    <input type="password" id="password" name="password" placeholder="Sua senha do AD" required>
-                </div>
-                
-                <button type="submit" class="btn-primario">Acessar Sistema</button>
-            </form>
-
-            <div class="rodape-login">
-                &copy; 2026 LuftFarma - Torre de Controle<br>
-                Acesso Restrito e Monitorado
+    <div class="login-interface" id="loginCard">
+        <div class="brand-header">
+            <div class="logo-icon-wrapper">
+                <i class="bi bi-airplane-engines"></i>
             </div>
+            <h1>FLIGHT OPS</h1>
+            <span>Command Center</span>
+        </div>
+
+        <div class="alert-area">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'error' if category == 'error' else 'success' }}">
+                            <i class="bi bi-info-circle-fill"></i>
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <form method="POST" id="loginForm">
+            <div class="input-group">
+                <label class="input-label">USUÁRIO LUFT</label>
+                <input type="text" class="form-control" name="username" placeholder="Usuário de Rede" 
+                       required autocomplete="username" autofocus>
+                <i class="bi bi-person-fill input-icon"></i>
+            </div>
+
+            <div class="input-group">
+                <label class="input-label">SENHA LUFT</label>
+                <input type="password" class="form-control" name="password" id="password" 
+                       placeholder="Senha do Usuário" required autocomplete="current-password">
+                <i class="bi bi-eye-slash-fill input-icon" id="togglePass" title="Ver Senha"></i>
+            </div>
+
+            <button type="submit" class="btn-takeoff" id="btnSubmit">
+                <div class="runway-lights"></div>
+                <span id="btnText">INICIAR OPERAÇÃO</span>
+                <i class="bi bi-airplane-fill plane-takeoff-icon"></i>
+            </button>
+        </form>
+
+        <div class="footer">
+            <i class="bi bi-shield-lock-fill"></i> Conexão Segura SSL<br>
+            © 2026 LuftFarma Logistics
         </div>
     </div>
 
     <script>
-        // Detecção automática de tema escuro
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.documentElement.setAttribute('data-theme', 'dark');
+        // 1. GERADOR DE TRÁFEGO AÉREO
+        const sky = document.getElementById('sky-traffic');
+        const planeIcons = ['bi-airplane-fill', 'bi-cursor-fill'];
+        
+        function createPlane() {
+            const plane = document.createElement('i');
+            plane.classList.add('bi', planeIcons[Math.floor(Math.random() * planeIcons.length)], 'plane-obj');
+            
+            // Randomização
+            const startY = Math.random() * window.innerHeight;
+            const size = Math.random() * 20 + 10; // 10px a 30px
+            const duration = Math.random() * 10 + 10; // 10s a 20s
+            const delay = Math.random() * 5;
+            
+            plane.style.fontSize = `${size}px`;
+            plane.style.top = `${startY}px`;
+            plane.style.left = `-50px`;
+            
+            // Animação CSS inline para performance
+            plane.style.transition = `transform ${duration}s linear`;
+            
+            sky.appendChild(plane);
+
+            // Dispara voo
+            setTimeout(() => {
+                const endY = startY + (Math.random() * 200 - 100); // Variação leve de altitude
+                const rotate = Math.atan2(endY - startY, window.innerWidth) * (180 / Math.PI);
+                plane.style.transform = `translate(${window.innerWidth + 100}px, ${endY - startY}px) rotate(${rotate}deg)`;
+            }, 100);
+
+            // Limpeza
+            setTimeout(() => { plane.remove(); }, duration * 1000 + 1000);
         }
+
+        // Gera nuvens
+        function createCloud() {
+            const cloud = document.createElement('div');
+            cloud.classList.add('cloud-obj');
+            
+            const width = Math.random() * 200 + 100;
+            const startY = Math.random() * window.innerHeight;
+            const duration = Math.random() * 30 + 20;
+
+            cloud.style.width = `${width}px`;
+            cloud.style.height = `${width * 0.4}px`;
+            cloud.style.top = `${startY}px`;
+            cloud.style.left = `-300px`;
+            cloud.style.transition = `transform ${duration}s linear`;
+
+            sky.appendChild(cloud);
+
+            setTimeout(() => {
+                cloud.style.transform = `translateX(${window.innerWidth + 400}px)`;
+            }, 100);
+
+            setTimeout(() => { cloud.remove(); }, duration * 1000);
+        }
+
+        // Loop Infinito
+        setInterval(createPlane, 2000);
+        setInterval(createCloud, 5000);
+        
+        // Cria alguns iniciais
+        for(let i=0; i<5; i++) { createPlane(); createCloud(); }
+
+
+        // 2. TOGGLE SENHA
+        const togglePass = document.getElementById('togglePass');
+        const passInput = document.getElementById('password');
+
+        togglePass.addEventListener('click', () => {
+            const type = passInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passInput.setAttribute('type', type);
+            togglePass.classList.toggle('bi-eye-fill');
+            togglePass.classList.toggle('bi-eye-slash-fill');
+        });
+
+
+        // 3. ANIMAÇÃO DE SAÍDA (SUBMIT)
+        const form = document.getElementById('loginForm');
+        const card = document.getElementById('loginCard');
+        const btn = document.getElementById('btnSubmit');
+        const btnText = document.getElementById('btnText');
+
+        form.addEventListener('submit', (e) => {
+            // Efeito visual antes de enviar
+            // Nota: Se o form enviar muito rápido, o usuário não vê. 
+            // Mas em apps reais tem delay de rede.
+            
+            btnText.innerText = "DECOLANDO...";
+            btn.style.background = "#2b8a3e"; // Verde sucesso
+            
+            // Opcional: Adicionar delay artificial se quiser ver a animação
+            e.preventDefault();
+            card.classList.add('card-exit-anim');
+            setTimeout(() => form.submit(), 800);
+        });
+
+        // --- AUTO-REMOVE ALERTAS ---
+        setTimeout(() => {
+        const alerts = document.querySelectorAll('.alert');
+        alerts.forEach(alert => {
+            // Animação de saída (Fade out + Slide Up)
+            alert.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            alert.style.opacity = '0';
+            alert.style.transform = 'translateY(-20px)';
+            
+            // Remove do HTML depois da animação
+            setTimeout(() => alert.remove(), 600);
+        });
+    }, 5000); // 5000ms = 5 segundos
+
     </script>
 </body>
 </html>

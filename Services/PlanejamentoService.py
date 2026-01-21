@@ -87,6 +87,23 @@ def BuscarCtcsAereoHoje():
             def to_str(val): return str(val).strip() if val else ''
             def fmt_moeda(val): return f"{to_float(val):,.2f}"
 
+            # --- LÓGICA DE CONTAGEM DE NOTAS ---
+            # Tenta pegar o campo 'notas'. Se sua coluna tiver outro nome (ex: doc_originario), altere aqui.
+            raw_notas = getattr(c, 'notas', '') 
+            qtd_notas_calc = 0
+            
+            if raw_notas:
+                # Transforma tudo em string, troca barras e espaços extras por vírgula para padronizar
+                s_notas = str(raw_notas).replace('/', ',').replace(';', ',').replace('-', ',')
+                # Quebra por vírgula e filtra itens vazios
+                lista_n = [n for n in s_notas.split(',') if n.strip()]
+                qtd_notas_calc = len(lista_n)
+            
+            # Fallback: Se a contagem deu 0 mas existe volumes, assumimos pelo menos 1 documento
+            if qtd_notas_calc == 0 and to_int(c.volumes) > 0:
+                qtd_notas_calc = 1
+            # ------------------------------------
+
             HoraFormatada = '--:--'
             if c.hora:
                 h = str(c.hora).strip()
@@ -113,8 +130,12 @@ def BuscarCtcsAereoHoje():
                 'peso_taxado': to_float(c.pesotax),
                 'val_mercadoria': fmt_moeda(c.valmerc),
                 'raw_val_mercadoria': to_float(c.valmerc),
-                'raw_frete_total': to_float(c.fretetotal),
+                'raw_frete_total': to_float(c.fretetotalbruto),
                 
+                # --- NOVO CAMPO CALCULADO ---
+                'qtd_notas': qtd_notas_calc,
+                # ----------------------------
+
                 # O Objeto Completo vai aqui
                 'full_data': dados_completos
             })
@@ -122,7 +143,7 @@ def BuscarCtcsAereoHoje():
         return ListaCtcs
     finally:
         Sessao.close()
-
+        
 from sqlalchemy import or_
 # Captura detalhes completos do CTC a partir da Filial, Série e Número, para usar no planejamento
 def ObterCtcDetalhado(Filial, Serie, Numero):

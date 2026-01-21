@@ -227,7 +227,8 @@
                         <th style="width: 140px;">Rota</th>
                         <th>Remetente / Destinatário</th>
                         <th onclick="Ordenar('volumes')" style="text-align: right;">Vol. <i class="ph-bold ph-caret-up-down sort-icon"></i></th>
-                        <th onclick="Ordenar('raw_val_mercadoria')" style="text-align: right;">Valor <i class="ph-bold ph-caret-up-down sort-icon"></i></th>
+                        <th onclick="Ordenar('qtd_notas')" style="text-align: right;">Qtd. Notas <i class="ph-bold ph-caret-up-down sort-icon"></i></th>
+                        <th onclick="Ordenar('raw_val_mercadoria')" style="text-align: right;">Valor da Mercadoria <i class="ph-bold ph-caret-up-down sort-icon"></i></th>
                         <th onclick="Ordenar('peso_taxado')" style="text-align: right;">Peso <i class="ph-bold ph-caret-up-down sort-icon"></i></th>
                         <th onclick="Ordenar('raw_frete_total')" style="text-align: right;">Frete <i class="ph-bold ph-caret-up-down sort-icon"></i></th>
                     </tr>
@@ -397,6 +398,7 @@
                     <div style="font-size: 0.75rem; color:var(--text-muted);">${r.destinatario.substring(0,15)}...</div>
                 </td>
                 <td style="text-align:right;">${r.volumes}</td>
+                <td style="text-align:right;">${r.qtd_notas}</td>
                 <td style="text-align:right; font-weight:600;">${r.val_mercadoria}</td>
                 <td style="text-align:right;">${r.peso_taxado.toLocaleString('pt-BR')} kg</td>
                 <td class="col-money">${r.raw_frete_total}</td>

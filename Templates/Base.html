@@ -159,6 +159,28 @@
             document.documentElement.setAttribute('data-theme', temaSalvo);
             if(temaSalvo === 'dark') document.querySelector('.btn-icon i').classList.replace('ph-moon', 'ph-sun');
         }
+
+        // --- REGRA PARA ELIMINAR ALERTAS APÓS 5 SEGUNDOS ---
+        document.addEventListener("DOMContentLoaded", function() {
+            const alerts = document.querySelectorAll('.alert'); // Pega todos os alertas
+            
+            if (alerts.length > 0) {
+                setTimeout(() => {
+                    alerts.forEach(alert => {
+                        // 1. Efeito visual: Torna transparente e sobe um pouco
+                        alert.style.transition = 'all 0.5s ease';
+                        alert.style.opacity = '0';
+                        alert.style.transform = 'translateY(-20px)'; // Efeito de saída para cima
+
+                        // 2. Remove do DOM (HTML) após a animação terminar (500ms)
+                        setTimeout(() => {
+                            alert.remove();
+                        }, 500);
+                    });
+                }, 5000); // Espera 5 segundos antes de começar
+            }
+        });
+        
     </script>
 </body>
 </html>
