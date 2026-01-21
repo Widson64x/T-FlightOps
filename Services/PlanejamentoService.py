@@ -3,11 +3,54 @@ from sqlalchemy import desc
 from Conexoes import ObterSessaoSqlServer
 from Models.SQL_SERVER.Ctc import Ctc
 
+from datetime import datetime, date, time, timedelta
+from decimal import Decimal
+from sqlalchemy import desc
+from Conexoes import ObterSessaoSqlServer
+from Models.SQL_SERVER.Ctc import Ctc
+
+def ObterCtcCompleto(filial, serie, ctc_num):
+    Sessao = ObterSessaoSqlServer()
+    try:
+        # Busca flexível (remove zeros a esquerda se precisar)
+        f, s, n = str(filial).strip(), str(serie).strip(), str(ctc_num).strip()
+        
+        c = Sessao.query(Ctc).filter(
+            Ctc.filial == f,
+            Ctc.seriectc == s,
+            Ctc.filialctc == n
+        ).first()
+
+        # Tenta achar sem zeros se falhar
+        if not c:
+            c = Sessao.query(Ctc).filter(
+                Ctc.filial == f, 
+                Ctc.seriectc == s, 
+                Ctc.filialctc == n.lstrip('0')
+            ).first()
+
+        if not c: return None
+
+        # Serializa TODAS as colunas
+        dados_completos = {}
+        for coluna in c.__table__.columns:
+            valor = getattr(c, coluna.name)
+            if isinstance(valor, (datetime, date, time)):
+                valor = str(valor)
+            elif isinstance(valor, Decimal):
+                valor = float(valor)
+            elif valor is None:
+                valor = ""
+            dados_completos[coluna.name] = valor
+            
+        return dados_completos
+    finally:
+        Sessao.close()
+        
 def BuscarCtcsAereoHoje():
     Sessao = ObterSessaoSqlServer()
     try:
-        Hoje = date.today() - timedelta(days=0  ) # <--- Subtrai 1 dia
-        #Hoje = date.today()
+        Hoje = date.today() - timedelta(days=0) 
         Inicio = datetime.combine(Hoje, time.min)
         Fim = datetime.combine(Hoje, time.max)
         
@@ -16,15 +59,50 @@ def BuscarCtcsAereoHoje():
             Ctc.data <= Fim,
             Ctc.tipodoc != 'COB',
             Ctc.modal.like('AEREO%')
-        ).order_by(desc(Ctc.fretetotal)).all()
+        ).order_by(
+            desc(Ctc.data),
+            desc(Ctc.hora)
+        ).all()
         
         ListaCtcs = []
         for c in Resultados:
-            # Formatadores
+            # --- HELPER: Serializa TODOS os dados do banco para o Modal ---
+            dados_completos = {}
+            for coluna in c.__table__.columns:
+                valor = getattr(c, coluna.name)
+                # Trata tipos que o JSON não aceita nativamente
+                if isinstance(valor, (datetime, date, time)):
+                    valor = str(valor)
+                elif isinstance(valor, Decimal):
+                    valor = float(valor)
+                elif valor is None:
+                    valor = ""
+                
+                dados_completos[coluna.name] = valor
+            # ------------------------------------------------------------
+
+            # Formatadores visuais para o Card
             def to_float(val): return float(val) if val else 0.0
             def to_int(val): return int(val) if val else 0
             def to_str(val): return str(val).strip() if val else ''
             def fmt_moeda(val): return f"{to_float(val):,.2f}"
+
+            # --- LÓGICA DE CONTAGEM DE NOTAS ---
+            # Tenta pegar o campo 'notas'. Se sua coluna tiver outro nome (ex: doc_originario), altere aqui.
+            raw_notas = getattr(c, 'notas', '') 
+            qtd_notas_calc = 0
+            
+            if raw_notas:
+                # Transforma tudo em string, troca barras e espaços extras por vírgula para padronizar
+                s_notas = str(raw_notas).replace('/', ',').replace(';', ',').replace('-', ',')
+                # Quebra por vírgula e filtra itens vazios
+                lista_n = [n for n in s_notas.split(',') if n.strip()]
+                qtd_notas_calc = len(lista_n)
+            
+            # Fallback: Se a contagem deu 0 mas existe volumes, assumimos pelo menos 1 documento
+            if qtd_notas_calc == 0 and to_int(c.volumes) > 0:
+                qtd_notas_calc = 1
+            # ------------------------------------
 
             HoraFormatada = '--:--'
             if c.hora:
@@ -35,6 +113,7 @@ def BuscarCtcsAereoHoje():
                 HoraFormatada = h
 
             ListaCtcs.append({
+                # Dados Resumidos para o Card
                 'id_unico': f"{to_str(c.filial)}-{to_str(c.filialctc)}",
                 'filial': to_str(c.filial),
                 'ctc': to_str(c.filialctc),
@@ -45,25 +124,26 @@ def BuscarCtcsAereoHoje():
                 'origem': f"{to_str(c.cidade_orig)}/{to_str(c.uf_orig)}",
                 'destino': f"{to_str(c.cidade_dest)}/{to_str(c.uf_dest)}",
                 'unid_lastmile': to_str(c.rotafilialdest),
-                'remetente': to_str(c.remet_nome),
+                'remetente': to_str(c.remet_nome),     # Nome do Cliente
                 'destinatario': to_str(c.dest_nome),
-                'nfs': to_str(c.nfs),
-                'natureza': to_str(c.natureza),
-                'especie': to_str(c.especie),
                 'volumes': to_int(c.volumes),
-                'peso_real': to_float(c.peso),
                 'peso_taxado': to_float(c.pesotax),
                 'val_mercadoria': fmt_moeda(c.valmerc),
-                'frete_valor': fmt_moeda(c.fretevalor),
-                'gris': fmt_moeda(c.gris),
-                'frete_total': fmt_moeda(c.fretetotal),
-                'raw_frete_total': to_float(c.fretetotal)
+                'raw_val_mercadoria': to_float(c.valmerc),
+                'raw_frete_total': to_float(c.fretetotalbruto),
+                
+                # --- NOVO CAMPO CALCULADO ---
+                'qtd_notas': qtd_notas_calc,
+                # ----------------------------
+
+                # O Objeto Completo vai aqui
+                'full_data': dados_completos
             })
             
         return ListaCtcs
     finally:
         Sessao.close()
-
+        
 from sqlalchemy import or_
 # Captura detalhes completos do CTC a partir da Filial, Série e Número, para usar no planejamento
 def ObterCtcDetalhado(Filial, Serie, Numero):

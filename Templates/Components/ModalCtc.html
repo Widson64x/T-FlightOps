@@ -1,0 +1,457 @@
+<style>
+    /* =========================================
+       CSS: SYSTEM UI & GRID (Foco em Alinhamento)
+       ========================================= */
+    :root {
+        --c-bg-app: #f1f5f9;       /* Fundo da janela */
+        --c-bg-card: #ffffff;      /* Fundo dos cards */
+        --c-border: #e2e8f0;       /* Bordas sutis */
+        --c-text-main: #334155;    /* Texto Principal */
+        --c-text-muted: #94a3b8;   /* Rótulos */
+        --c-accent: #0f172a;       /* Destaques Escuros */
+        --c-primary: #2563eb;      /* Azul Institucional */
+        
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --radius: 8px;
+    }
+
+    /* Reset e Base */
+    .md-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(6px);
+        z-index: 10000; display: none; align-items: center; justify-content: center;
+        opacity: 0; transition: opacity 0.2s ease-out;
+    }
+    .md-overlay.show { opacity: 1; }
+
+    .md-box {
+        width: 96%; max-width: 1300px; height: 92vh;
+        background: var(--c-bg-app); border-radius: 12px;
+        box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+        display: flex; flex-direction: column; overflow: hidden;
+        transform: scale(0.98); transition: transform 0.2s ease-out;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    .md-overlay.show .md-box { transform: scale(1); }
+
+    /* --- HEADER (Barra de Título) --- */
+    .md-header {
+        background: var(--c-bg-card); padding: 16px 24px;
+        border-bottom: 1px solid var(--c-border);
+        display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+    }
+    .doc-badge {
+        background: var(--c-accent); color: #fff; padding: 6px 12px;
+        border-radius: 6px; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.5px;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .md-close {
+        border: none; background: transparent; font-size: 1.5rem; color: var(--c-text-muted);
+        cursor: pointer; transition: color 0.2s; display: flex; align-items: center;
+    }
+    .md-close:hover { color: #ef4444; }
+
+    /* --- CORPO (Scroll) --- */
+    .md-body {
+        flex: 1; overflow-y: auto; padding: 24px;
+        display: flex; flex-direction: column; gap: 24px;
+    }
+    
+    /* Scrollbar Estilizada */
+    .md-body::-webkit-scrollbar { width: 8px; }
+    .md-body::-webkit-scrollbar-track { background: transparent; }
+    .md-body::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+
+    /* --- SISTEMA DE GRID (12 Colunas) --- */
+    .grid-container {
+        display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; width: 100%;
+    }
+    /* Classes de Colunas (Span) */
+    .col-12 { grid-column: span 12; }
+    .col-9  { grid-column: span 9; }
+    .col-8  { grid-column: span 8; }
+    .col-6  { grid-column: span 6; }
+    .col-4  { grid-column: span 4; }
+    .col-3  { grid-column: span 3; }
+    .col-2  { grid-column: span 2; }
+
+    /* Responsividade */
+    @media (max-width: 1024px) {
+        .col-3, .col-4 { grid-column: span 6; }
+        .col-8, .col-9 { grid-column: span 12; }
+    }
+    @media (max-width: 768px) {
+        .col-2, .col-3, .col-4, .col-6 { grid-column: span 12; }
+    }
+
+    /* --- COMPONENTES VISUAIS --- */
+    
+    /* 1. Cards (Container de Grupo) */
+    .box-card {
+        background: var(--c-bg-card); border: 1px solid var(--c-border);
+        border-radius: var(--radius); box-shadow: var(--shadow-sm);
+        display: flex; flex-direction: column; overflow: hidden;
+    }
+    .box-header {
+        background: #f8fafc; padding: 10px 16px; border-bottom: 1px solid var(--c-border);
+        font-size: 0.75rem; font-weight: 700; color: var(--c-text-muted); text-transform: uppercase; letter-spacing: 0.05em;
+        display: flex; align-items: center; gap: 6px;
+    }
+    .box-body { padding: 16px; }
+
+    /* 2. Pares Label-Valor (Alinhamento Vertical) */
+    .field-row { display: flex; gap: 16px; margin-bottom: 12px; }
+    .field-row:last-child { margin-bottom: 0; }
+    
+    .kv { display: flex; flex-direction: column; flex: 1; min-width: 0; } /* min-width 0 evita estourar grid */
+    
+    .lb {
+        font-size: 0.65rem; color: var(--c-text-muted); font-weight: 600; 
+        text-transform: uppercase; margin-bottom: 4px; white-space: nowrap;
+    }
+    .vl {
+        font-size: 0.9rem; color: var(--c-text-main); font-weight: 500;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        min-height: 1.2em; /* Garante altura mesmo vazio */
+    }
+    
+    /* Variações de Valor */
+    .vl.lg { font-size: 1.1rem; font-weight: 700; color: var(--c-accent); }
+    .vl.mono { font-family: 'Roboto Mono', monospace; font-size: 0.85rem; letter-spacing: -0.5px; }
+    .vl.money { font-family: 'Roboto Mono', monospace; font-weight: 700; color: #059669; }
+    .vl.status-ok { color: #16a34a; font-weight: 700; }
+    .vl.status-err { color: #dc2626; font-weight: 700; }
+
+    /* 3. Tabelas Internas (Financeiro) */
+    .table-clean { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .table-clean td { padding: 6px 0; border-bottom: 1px dashed var(--c-border); }
+    .table-clean tr:last-child td { border-bottom: none; }
+    .td-lb { color: var(--c-text-muted); }
+    .td-vl { text-align: right; font-weight: 600; color: var(--c-text-main); font-family: 'Roboto Mono', monospace;}
+
+    /* 4. Loader */
+    .loader-overlay {
+        position: absolute; inset: 0; background: rgba(255,255,255,0.9); z-index: 50;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        color: var(--c-primary); gap: 10px; font-weight: 600;
+    }
+</style>
+
+<div id="modal-global-ctc" class="md-overlay" onclick="FecharModalGlobal(event)">
+    <div class="md-box" onclick="event.stopPropagation()">
+        
+        <div class="md-header">
+            <div style="display:flex; align-items:center; gap:16px;">
+                <div class="doc-badge">
+                    <i class="bi bi-truck"></i> <span id="mdg-ctc-num">CTC --</span>
+                </div>
+                <div style="display:flex; flex-direction:column; justify-content:center;">
+                    <span id="mdg-filial" style="font-weight:700; font-size:1rem; color:var(--c-accent); line-height:1.1;">--</span>
+                    <span style="font-size:0.75rem; color:var(--c-text-muted);">Visualização Completa do Documento</span>
+                </div>
+            </div>
+            <button class="md-close" onclick="FecharModalGlobal(null)">&times;</button>
+        </div>
+
+        <div class="md-body" style="position: relative;">
+            
+            <div id="mdg-loader" class="loader-overlay">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div style="font-size:0.85rem; color:#64748b;">Carregando dados...</div>
+            </div>
+
+            <div id="mdg-content" class="grid-container"></div>
+            
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- FUNÇÕES DE CONTROLE ---
+    
+    async function AbrirModalGlobal(filial, serie, ctc) {
+        const modal = document.getElementById('modal-global-ctc');
+        const loader = document.getElementById('mdg-loader');
+        const content = document.getElementById('mdg-content');
+        
+        // Setup Visual
+        document.getElementById('mdg-ctc-num').innerText = `${ctc}-${serie}`;
+        document.getElementById('mdg-filial').innerText = `FILIAL: ${filial}`;
+        content.innerHTML = ''; 
+
+        // Abre
+        modal.style.display = 'flex';
+        requestAnimationFrame(() => modal.classList.add('show'));
+        loader.style.display = 'flex';
+
+        try {
+            const url = '{{ url_for("Planejamento.ApiCtcDetalhes", filial="__FIL__", serie="__SER__", ctc="__NUM__") }}'
+                .replace('__FIL__', filial).replace('__SER__', serie).replace('__NUM__', ctc);
+            
+            const response = await fetch(url);
+            if(!response.ok) throw new Error("Erro na comunicação com servidor");
+            const dados = await response.json();
+            
+            RenderizarGrid(dados);
+
+        } catch (error) {
+            console.error(error);
+            content.innerHTML = `
+                <div class="col-12" style="text-align:center; padding:40px;">
+                    <i class="bi bi-x-circle" style="font-size:3rem; color:#ef4444;"></i>
+                    <h3 style="color:#334155; margin-top:10px;">Falha ao carregar</h3>
+                    <p style="color:#94a3b8;">${error.message || error}</p>
+                </div>
+            `;
+        } finally {
+            loader.style.display = 'none';
+        }
+    }
+
+    function FecharModalGlobal(e) {
+        const modal = document.getElementById('modal-global-ctc');
+        if(!e || e.target === modal || e.target.closest('.md-close')) {
+            modal.classList.remove('show');
+            setTimeout(() => { modal.style.display = 'none'; }, 200);
+        }
+    }
+
+    // --- HELPERS DE FORMATAÇÃO (BLINDADOS) ---
+    
+    // Formata Moeda (checa se é numérico)
+    const fmtM = (v) => {
+        if (v === undefined || v === null || String(v).includes('NULL')) return '-';
+        return parseFloat(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    };
+
+    // Formata Data (converte tudo pra string antes de checar)
+    const fmtD = (v) => {
+        if (!v) return '-';
+        const s = String(v); // Converte número/objeto para texto à força
+        if (s === 'None' || s.includes('NULL')) return '-';
+        try { return s.split(' ')[0].split('-').reverse().join('/'); } catch { return s; }
+    };
+
+    // Checa valor genérico
+    const ck = (v) => {
+        if (v === undefined || v === null) return '&nbsp;';
+        const s = String(v);
+        return (s !== 'None' && s !== 'null' && s !== '[NULL]') ? s : '&nbsp;';
+    };
+    
+    // Cria o HTML do campo
+    const kv = (label, val, cls='') => `
+        <div class="kv">
+            <span class="lb">${label}</span>
+            <span class="vl ${cls}">${ck(val)}</span>
+        </div>`;
+
+    // --- RENDERIZADOR ---
+    function RenderizarGrid(d) {
+        const c = document.getElementById('mdg-content');
+        
+        // Verifica se entrega foi realizada (Lógica segura)
+        const temEntrega = d.entrega_data && !String(d.entrega_data).includes('NULL');
+
+        let html = ``;
+
+        // 1. LINHA DE STATUS (KPIs)
+        html += `
+        <div class="col-12 grid-container" style="gap:16px;">
+            <div class="col-2 box-card">
+                <div class="box-body">
+                    ${kv('Data Emissão', fmtD(d.data), 'lg')}
+                    <span style="font-size:0.75rem; color:#64748b;">${ck(d.hora)}</span>
+                </div>
+            </div>
+            <div class="col-2 box-card" style="border-left:4px solid #2563eb;">
+                <div class="box-body">
+                    ${kv('Previsão Entrega', fmtD(d.prev_entrega), 'lg')}
+                    <span style="font-size:0.75rem; color:#64748b;">Tipo: ${ck(d.prev_entregatipo)}</span>
+                </div>
+            </div>
+             <div class="col-2 box-card" style="${temEntrega ? 'background:#f0fdf4; border-color:#86efac;' : ''}">
+                <div class="box-body">
+                    ${kv('Status Entrega', temEntrega ? 'REALIZADA' : 'PENDENTE', temEntrega ? 'status-ok' : '')} 
+                    <span style="font-size:0.75rem; color:#64748b;">${ck(d.entrega_data)}</span>
+                </div>
+            </div>
+            <div class="col-6 box-card">
+                <div class="box-body" style="display:flex; justify-content:space-between;">
+                    ${kv('Natureza', d.natureza)}
+                    ${kv('Modal', d.modal)}
+                    ${kv('Volumes', d.volumes, 'lg')}
+                    ${kv('Peso Real', d.peso + ' kg')} 
+                    ${kv('Valor Merc.', fmtM(d.valmerc), 'money')}
+                </div>
+            </div>
+        </div>`;
+
+        // 2. ATORES
+        html += `
+        <div class="col-4 box-card">
+            <div class="box-header"><i class="bi bi-box-arrow-up"></i> Remetente</div>
+            <div class="box-body">
+                <div class="field-row">
+                    ${kv('Razão Social', d.remet_nome, 'lg')}
+                </div>
+                <div class="field-row">
+                    ${kv('CNPJ', d.remet_cgc, 'mono')}
+                    ${kv('IE', d.remet_ie, 'mono')}
+                </div>
+                 <div class="field-row">
+                    ${kv('Endereço', d.remet_end)}
+                    ${kv('CEP', d.remet_cep, 'mono')}
+                </div>
+                 <div class="field-row">
+                    ${kv('Cidade / UF', `${ck(d.remet_cidade)} - ${ck(d.remet_uf)}`)}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-4 box-card">
+            <div class="box-header"><i class="bi bi-box-arrow-in-down"></i> Destinatário</div>
+            <div class="box-body">
+                <div class="field-row">
+                    ${kv('Razão Social', d.dest_nome, 'lg')}
+                </div>
+                <div class="field-row">
+                    ${kv('CNPJ', d.dest_cgc, 'mono')}
+                    ${kv('IE', d.dest_ie, 'mono')}
+                </div>
+                 <div class="field-row">
+                    ${kv('Endereço', d.dest_end)}
+                    ${kv('CEP', d.dest_cep, 'mono')}
+                </div>
+                 <div class="field-row">
+                    ${kv('Cidade / UF', `${ck(d.dest_cidade)} - ${ck(d.dest_uf)}`)}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-4 box-card">
+            <div class="box-header"><i class="bi bi-person-badge"></i> Tomador / Outros</div>
+            <div class="box-body">
+                <div class="field-row">
+                    ${kv('Pagador', d.respons_nome)}
+                </div>
+                <div class="field-row">
+                    ${kv('CNPJ Pagador', d.respons_cgc, 'mono')}
+                </div>
+                <hr style="margin:10px 0; border:0; border-top:1px dashed #e2e8f0;">
+                <div class="field-row">
+                    ${kv('Redespacho', d.redesp_nome)}
+                </div>
+                 <div class="field-row">
+                    ${kv('Cidade Coleta', ck(d.cid_coleta) + ' - ' + ck(d.uf_coleta))}
+                </div>
+            </div>
+        </div>
+        `;
+
+        // 3. LOGÍSTICA
+        html += `
+        <div class="col-8 box-card">
+            <div class="box-header"><i class="bi bi-map"></i> Dados Operacionais</div>
+            <div class="box-body">
+                <div class="field-row">
+                    ${kv('Origem Doc', d.origem)}
+                    ${kv('Cidade Origem', d.cidade_orig + '/' + d.uf_orig)}
+                    <i class="bi bi-arrow-right" style="align-self:center; color:#ccc;"></i>
+                    ${kv('Cidade Destino', d.cidade_dest + '/' + d.uf_dest)}
+                    ${kv('Unid. LASTMILE', d.rotafilialdest)}
+                    ${kv('Unid. Descr LASTMILE', d.descr_rotafilial)}
+                </div>
+                <div class="field-row" style="margin-top:16px;">
+                    ${kv('Espécie', d.especie)}
+                    ${kv('Peso Taxado', d.pesotax, 'mono')}
+                    ${kv('Data Limite Embarque', fmtD(d.datalimiteembarque))}
+                    ${kv('CFOP', d.cfop, 'mono')}
+                    ${kv('Tributação', d.tribut)}
+                </div>
+                <div class="field-row" style="margin-top:16px;">
+                    <div class="kv" style="flex:3;">
+                         <span class="lb">Notas Fiscais (NFs)</span>
+                         <div style="background:#f8fafc; border:1px solid #e2e8f0; padding:8px; border-radius:4px; font-size:0.8rem; font-family:'Roboto Mono'; max-height:50px; overflow-y:auto;">
+                            ${ck(d.nfs)}
+                         </div>
+                    </div>
+                    ${kv('Qtd NFs', d.qtdenfs)}
+                </div>
+            </div>
+        </div>
+        `;
+
+        // 4. FINANCEIRO
+        html += `
+        <div class="col-4 box-card">
+            <div class="box-header"><i class="bi bi-currency-dollar"></i> Custos & Frete</div>
+            <div class="box-body" style="background:#fcfcfc;">
+                <table class="table-clean">
+                    <tr><td class="td-lb">Frete Peso</td><td class="td-vl">${fmtM(d.fretepeso)}</td></tr>
+                    <tr><td class="td-lb">Frete Valor</td><td class="td-vl">${fmtM(d.fretevalor)}</td></tr>
+                    <tr><td class="td-lb">GRIS</td><td class="td-vl">${fmtM(d.gris)}</td></tr>
+                    <tr><td class="td-lb">Pedágio</td><td class="td-vl">${fmtM(d.pedagio)}</td></tr>
+                    <tr><td class="td-lb">Taxas (Coleta/Entr)</td><td class="td-vl">${fmtM(parseFloat(d.txcoleta||0) + parseFloat(d.txentregared||0))}</td></tr>
+                    <tr><td class="td-lb">Outros (${ck(d.descrtxoutros)})</td><td class="td-vl">${fmtM(d.txoutros)}</td></tr>
+                    <tr style="border-top:2px solid #e2e8f0;">
+                        <td class="td-lb" style="padding-top:10px; font-weight:700;">TOTAL FRETE</td>
+                        <td class="td-vl" style="padding-top:10px; font-size:1.2rem; color:#2563eb;">${fmtM(d.fretetotalbruto)}</td>
+                    </tr>
+                </table>
+                 <div style="margin-top:10px; text-align:right; font-size:0.7rem; color:#94a3b8;">
+                    Tab: ${ck(d.tabfrete)} | ICMS: ${fmtM(d.ValorICMS)} | Tab. Descr: ${ck(d.tabfretedescr)}
+                </div>
+            </div>
+        </div>
+        `;
+
+        // 5. OBSERVAÇÕES
+        html += `
+        <div class="col-6 box-card">
+            <div class="box-header"><i class="bi bi-chat-text"></i> Observações</div>
+            <div class="box-body">
+                <div style="margin-bottom:10px;">
+                    <span class="lb" style="color:#b45309;">Emissão</span>
+                    <p style="background:#fffbeb; padding:8px; border-radius:4px; font-size:0.85rem; color:#92400e; margin:0;">
+                        ${ck(d.obs_emissao)}
+                    </p>
+                </div>
+                ${d.obs_ocorr ? `
+                <div>
+                    <span class="lb" style="color:#b91c1c;">Ocorrências</span>
+                    <p style="background:#fef2f2; padding:8px; border-radius:4px; font-size:0.85rem; color:#991b1b; margin:0;">
+                        ${ck(d.obs_ocorr)}
+                    </p>
+                </div>` : ''}
+            </div>
+        </div>
+
+        <div class="col-6 box-card">
+            <div class="box-header"><i class="bi bi-laptop"></i> Sistema & Rastreio</div>
+            <div class="box-body">
+                 <div class="field-row">
+                    ${kv('Controle RU', d.controleRU)}
+                    ${kv('Num. Serviço', d.nservico + '/' + d.nserviconum)}
+                    ${kv('Fatura', d.faturanum)}
+                </div>
+                <div class="field-row">
+                    ${kv('Disp. Cliente?', d.at_cliente)}
+                    ${kv('Enviado EDI?', d.at_edi)}
+                    ${kv('Cancelado?', d.cancelado, d.cancelado === 'S' ? 'status-err' : '')}
+                </div>
+                 <div class="field-row">
+                     <div class="kv col-12">
+                        <span class="lb">Log de Rastreio</span>
+                        <span class="vl mono" style="white-space:normal; font-size:0.75rem; color:#64748b;">
+                            Criado por: ${ck(d.emissor)} | Impresso: ${ck(d.impresso_usu)} | Versão: ${ck(d.VersaoSistema)}
+                        </span>
+                     </div>
+                </div>
+            </div>
+        </div>
+        `;
+
+        c.innerHTML = html;
+    }
+</script>
