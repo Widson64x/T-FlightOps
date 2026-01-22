@@ -302,6 +302,7 @@
                         <th>Voo Atual</th>
                         <th>Peso (Kg)</th>
                         <th>Status</th>
+                        <th>Data Status</th>
                         <th>Atualização</th>
                     </tr>
                 </thead>
@@ -431,6 +432,7 @@
                         <td>${awb.Peso.toFixed(1)} kg</td>
                         <td><span class="badge ${badgeClass}">${awb.Status}</span></td>
                         <td style="color:var(--cor-texto-secundario); font-size:0.8rem;">${awb.DataStatus}</td>
+                        <td style="color:var(--cor-texto-secundario); font-size:0.8rem;">${awb.DataInsert}</td>
                     `;
 
                     let trDetail = document.createElement('tr');

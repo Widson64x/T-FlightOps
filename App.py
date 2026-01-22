@@ -16,6 +16,8 @@ from Routes.RotasEscalas import EscalasBp
 from Routes.RotasPlanejamento import PlanejamentoBp
 from Routes.RotasAcompanhamento import AcompanhamentoBP
 
+# --- REGISTRO DE ROTAS (BLUEPRINTS) ---
+# Pega o prefixo definido no .env ou padrão (ex: /T-FlightOps)
 Prefix = ConfiguracaoAtual.ROUTE_PREFIX
 
 app = Flask(__name__,
@@ -74,9 +76,7 @@ def CarregarUsuario(UserId):
 
     return UsuarioEncontrado
 
-# --- REGISTRO DE ROTAS (BLUEPRINTS) ---
-# Pega o prefixo definido no .env ou padrão (ex: /T-FlightOps)
-Prefix = ConfiguracaoAtual.ROUTE_PREFIX
+
 
 # O Auth geralmente fica separado, ex: /T-FlightOps/auth
 app.register_blueprint(AuthBp, url_prefix=f'{Prefix}/auth')

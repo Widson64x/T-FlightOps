@@ -60,6 +60,7 @@ class AwbStatus(Base):
     # Chave Composta (Log)
     CODAWB = Column(String(15), primary_key=True)
     STATUS_AWB = Column(String(50), primary_key=True)
+    DATA_INSERT = Column(DateTime, primary_key=True)
     DATAHORA_STATUS = Column(DateTime, primary_key=True)
     
     CIA = Column(String(2))

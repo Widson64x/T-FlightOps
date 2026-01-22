@@ -59,14 +59,14 @@ class AcompanhamentoService:
             lista_numeros = [r[0].awb for r in resultados_awb if r[0].awb]
             dicionario_status = {}
             if lista_numeros:
-                st_q = session.query(AwbStatus.CODAWB, AwbStatus.STATUS_AWB, AwbStatus.DATAHORA_STATUS, AwbStatus.VOO)\
+                st_q = session.query(AwbStatus.CODAWB, AwbStatus.STATUS_AWB, AwbStatus.DATAHORA_STATUS, AwbStatus.DATA_INSERT, AwbStatus.VOO)\
                     .filter(AwbStatus.CODAWB.in_(lista_numeros)).order_by(AwbStatus.DATAHORA_STATUS.asc()).all()
                 for st in st_q:
-                    dicionario_status[st.CODAWB] = {'Status': st.STATUS_AWB, 'Data': st.DATAHORA_STATUS, 'Voo': st.VOO}
+                    dicionario_status[st.CODAWB] = {'Status': st.STATUS_AWB, 'Data': st.DATAHORA_STATUS, 'Voo': st.VOO, 'DataInsert': st.DATA_INSERT}
 
             lista_final = []
             for awb_obj, cia_nome in resultados_awb:
-                d_st = dicionario_status.get(awb_obj.awb, {'Status': 'AGUARDANDO', 'Data': None, 'Voo': ''})
+                d_st = dicionario_status.get(awb_obj.awb, {'Status': 'AGUARDANDO', 'Data': None, 'Voo': '', 'DataInsert': None})
                 geo_o = AeroportoService.BuscarPorSigla(awb_obj.siglaorigem)
                 geo_d = AeroportoService.BuscarPorSigla(awb_obj.siglades)
 
@@ -80,6 +80,7 @@ class AcompanhamentoService:
                     "Peso": float(awb_obj.pesoreal or 0),
                     "Status": d_st['Status'],
                     "DataStatus": d_st['Data'].strftime('%d/%m %H:%M') if d_st['Data'] else '',
+                    "DataInsert": d_st['DataInsert'].strftime('%d/%m/%Y %H:%M') if d_st['DataInsert'] else '',
                     "Voo": d_st['Voo'] or '',
                     "RotaMap": {
                         "Origem": [geo_o.Latitude, geo_o.Longitude] if geo_o and geo_o.Latitude else None,
@@ -222,7 +223,7 @@ class AcompanhamentoService:
                 primeiro_local = primeiro_h.LOCAL_STATUS.strip()[:3].upper() if primeiro_h.LOCAL_STATUS and primeiro_h.LOCAL_STATUS.lower() != 'nul' else None
                 
                 if primeiro_local == destino_final_esperado:
-                    # ...então o destino real provavelmente é a Origem do Cadastro (Logística Reversa ou Erro)
+                    # então o destino real provavelmente é a Origem do Cadastro (Logística Reversa ou Erro)
                     destino_real = origem_inicial
 
             # 3. Fallback se não achou local atual
