@@ -16,23 +16,25 @@ jobs:
       shell: powershell
       run: |
         # --- CONFIGURAÇÕES ---
+        $ServiceName = "Luft-FlightOps"  # <--- ESSA LINHA ERA A QUE FALTAVA!
         $AppPath = "C:\ProjetosPython\T-FlightOps"
-        $nssmPath = "C:\nssm-2.24\win64\nssm.exe"
         $LogFile = "C:\actions-runner\deploy-log.txt"
         
         # Inicia Log
         Start-Transcript -Path $LogFile -Append
-        Write-Host "--- DEPLOY LINEAR INICIADO: $(Get-Date) ---"
+        Write-Host "--- DEPLOY (MODO WINDOWS) INICIADO: $(Get-Date) ---"
 
-        # Garante que erros de comando não matem o script imediatamente, nós vamos checar manualmente
+        # Garante que erros de comando não matem o script (checagem manual)
         $ErrorActionPreference = "Continue"
 
         # -----------------------------------------------------------
-        # 1. PARAR SERVIÇO
+        # 1. PARAR SERVIÇO (Usando NET STOP)
         # -----------------------------------------------------------
         Write-Host "1. Parando serviço $ServiceName..."
-        # Tenta parar. Se der erro (ex: já estava parado), apenas avisa e continua.
-        & $nssmPath stop $ServiceName
+        # O 'net stop' é nativo do Windows. O '2>&1' evita erros falsos no log.
+        cmd /c "net stop $ServiceName /y" 2>&1 | Out-Null
+        
+        # Espera forçada para garantir que o arquivo soltou
         Start-Sleep -Seconds 5
 
         # -----------------------------------------------------------
@@ -40,6 +42,7 @@ jobs:
         # -----------------------------------------------------------
         Write-Host "2. Limpando arquivos antigos..."
         if (Test-Path $AppPath) {
+            # Limpa tudo menos .venv, .git e .env
             Get-ChildItem -Path $AppPath -Exclude ".venv", ".git", ".env" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         } else {
             New-Item -ItemType Directory -Force -Path $AppPath
@@ -51,9 +54,9 @@ jobs:
         Write-Host "3. Copiando arquivos..."
         Copy-Item -Path ".\*" -Destination $AppPath -Recurse -Force -Exclude ".git", ".github"
         
-        # Verifica se a cópia funcionou
+        # Verifica se o arquivo principal está lá
         if (-not (Test-Path "$AppPath\WSGI.py")) {
-            Write-Error "ERRO FATAL: Arquivos não foram copiados corretamente."
+            Write-Error "ERRO FATAL: O arquivo WSGI.py não foi copiado."
             Stop-Transcript
             exit 1
         }
@@ -64,12 +67,12 @@ jobs:
         Write-Host "4. Instalando dependências..."
         Set-Location $AppPath
         if (Test-Path ".venv\Scripts\python.exe") {
-            # Roda o PIP. Se tiver avisos (amarelo), ele mostra mas não trava.
-            & .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+            # Executa pip ignorando avisos amarelos (warnings)
+            cmd /c ".\.venv\Scripts\python.exe -m pip install -r requirements.txt"
             
-            # Checa se o PIP quebrou de verdade (ExitCode diferente de 0)
+            # Só para se o código de saída for de erro real
             if ($LASTEXITCODE -ne 0) {
-                Write-Error "ERRO FATAL: Falha ao instalar requirements.txt"
+                Write-Error "ERRO FATAL: Falha no PIP. Código: $LASTEXITCODE"
                 Stop-Transcript
                 exit 1
             }
@@ -80,26 +83,27 @@ jobs:
         }
 
         # -----------------------------------------------------------
-        # 5. INICIAR SERVIÇO
+        # 5. INICIAR SERVIÇO (Usando NET START)
         # -----------------------------------------------------------
         Write-Host "5. Iniciando serviço $ServiceName..."
-        & $nssmPath start $ServiceName
+        cmd /c "net start $ServiceName"
         
-        # Espera um pouco para ver se o serviço firma
         Start-Sleep -Seconds 5
         
-        # Verifica se o serviço está rodando
+        # Verifica status
         $ServiceStatus = Get-Service $ServiceName
         if ($ServiceStatus.Status -ne 'Running') {
-            Write-Warning "ATENÇÃO: O serviço parece não ter iniciado corretamente. Status: $($ServiceStatus.Status)"
-            # Não vamos dar exit 1 aqui para tentar reiniciar o Nginx mesmo assim
+            Write-Warning "ALERTA: O serviço não está 'Running'. Status atual: $($ServiceStatus.Status)"
+        } else {
+            Write-Host "Serviço iniciado com sucesso!"
         }
 
         # -----------------------------------------------------------
         # 6. REINICIAR NGINX
         # -----------------------------------------------------------
         Write-Host "6. Reiniciando Nginx..."
-        & $nssmPath restart "Nginx" -ErrorAction Continue
-
+        # Reinicia o Nginx usando comandos nativos também
+        cmd /c "net stop Nginx && net start Nginx" 2>&1 | Out-Null
+        
         Write-Host "--- DEPLOY CONCLUÍDO ---"
         Stop-Transcript
