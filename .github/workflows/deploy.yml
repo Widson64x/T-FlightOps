@@ -14,9 +14,13 @@ jobs:
 
     - name: Atualizar Aplicação no Servidor
       shell: powershell
+      # Passamos as variaveis do Git para o PowerShell
+      env:
+        COMMIT_MSG: ${{ github.event.head_commit.message }}
+        COMMIT_AUTHOR: ${{ github.actor }}
       run: |
         # --- CONFIGURAÇÕES ---
-        $ServiceName = "Luft-FlightOps"  # <--- ESSA LINHA ERA A QUE FALTAVA!
+        $ServiceName = "Luft-FlightOps"
         $AppPath = "C:\ProjetosPython\T-FlightOps"
         $LogFile = "C:\actions-runner\deploy-log.txt"
         
@@ -24,17 +28,13 @@ jobs:
         Start-Transcript -Path $LogFile -Append
         Write-Host "--- DEPLOY (MODO WINDOWS) INICIADO: $(Get-Date) ---"
 
-        # Garante que erros de comando não matem o script (checagem manual)
         $ErrorActionPreference = "Continue"
 
         # -----------------------------------------------------------
-        # 1. PARAR SERVIÇO (Usando NET STOP)
+        # 1. PARAR SERVIÇO
         # -----------------------------------------------------------
         Write-Host "1. Parando serviço $ServiceName..."
-        # O 'net stop' é nativo do Windows. O '2>&1' evita erros falsos no log.
         cmd /c "net stop $ServiceName /y" 2>&1 | Out-Null
-        
-        # Espera forçada para garantir que o arquivo soltou
         Start-Sleep -Seconds 5
 
         # -----------------------------------------------------------
@@ -42,7 +42,6 @@ jobs:
         # -----------------------------------------------------------
         Write-Host "2. Limpando arquivos antigos..."
         if (Test-Path $AppPath) {
-            # Limpa tudo menos .venv, .git e .env
             Get-ChildItem -Path $AppPath -Exclude ".venv", ".git", ".env" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         } else {
             New-Item -ItemType Directory -Force -Path $AppPath
@@ -54,11 +53,9 @@ jobs:
         Write-Host "3. Copiando arquivos..."
         Copy-Item -Path ".\*" -Destination $AppPath -Recurse -Force -Exclude ".git", ".github"
         
-        # Verifica se o arquivo principal está lá
         if (-not (Test-Path "$AppPath\WSGI.py")) {
             Write-Error "ERRO FATAL: O arquivo WSGI.py não foi copiado."
-            Stop-Transcript
-            exit 1
+            Stop-Transcript; exit 1
         }
 
         # -----------------------------------------------------------
@@ -67,33 +64,50 @@ jobs:
         Write-Host "4. Instalando dependências..."
         Set-Location $AppPath
         if (Test-Path ".venv\Scripts\python.exe") {
-            # Executa pip ignorando avisos amarelos (warnings)
             cmd /c ".\.venv\Scripts\python.exe -m pip install -r requirements.txt"
             
-            # Só para se o código de saída for de erro real
             if ($LASTEXITCODE -ne 0) {
                 Write-Error "ERRO FATAL: Falha no PIP. Código: $LASTEXITCODE"
-                Stop-Transcript
-                exit 1
+                Stop-Transcript; exit 1
             }
+
+            # -----------------------------------------------------------
+            # 4.1 REGISTRAR NOVA VERSÃO (NOVO!)
+            # -----------------------------------------------------------
+            Write-Host "4.1 Registrando Versão no Banco..."
+            
+            # Lê o arquivo VERSION da raiz (Crie este arquivo com o número, ex: 1.0.1)
+            if (Test-Path "VERSION") {
+                $VersionNum = Get-Content "VERSION" -Raw
+                $VersionNum = $VersionNum.Trim() # Remove espaços extras
+                
+                # Limpa aspas da mensagem de commit para não quebrar o comando
+                $CleanMsg = $env:COMMIT_MSG -replace '"', ''
+                $Author = $env:COMMIT_AUTHOR
+
+                # Roda o script Python usando a venv
+                cmd /c ".\.venv\Scripts\python.exe Scripts/GestaoVersao.py nova --numero `"$VersionNum`" --estagio `"Alpha`" --msg `"$CleanMsg`" --dev `"$Author`""
+                
+                Write-Host "Versão $VersionNum registrada."
+            } else {
+                Write-Warning "Arquivo VERSION não encontrado. Pulei o registro de versão."
+            }
+
         } else {
             Write-Error "ERRO FATAL: .venv não encontrada!"
-            Stop-Transcript
-            exit 1
+            Stop-Transcript; exit 1
         }
 
         # -----------------------------------------------------------
-        # 5. INICIAR SERVIÇO (Usando NET START)
+        # 5. INICIAR SERVIÇO
         # -----------------------------------------------------------
         Write-Host "5. Iniciando serviço $ServiceName..."
         cmd /c "net start $ServiceName"
-        
         Start-Sleep -Seconds 5
         
-        # Verifica status
         $ServiceStatus = Get-Service $ServiceName
         if ($ServiceStatus.Status -ne 'Running') {
-            Write-Warning "ALERTA: O serviço não está 'Running'. Status atual: $($ServiceStatus.Status)"
+            Write-Warning "ALERTA: O serviço não está 'Running'."
         } else {
             Write-Host "Serviço iniciado com sucesso!"
         }
@@ -102,7 +116,6 @@ jobs:
         # 6. REINICIAR NGINX
         # -----------------------------------------------------------
         Write-Host "6. Reiniciando Nginx..."
-        # Reinicia o Nginx usando comandos nativos também
         cmd /c "net stop Nginx && net start Nginx" 2>&1 | Out-Null
         
         Write-Host "--- DEPLOY CONCLUÍDO ---"
