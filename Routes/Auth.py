@@ -1,11 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
-from Services.AuthService import AutenticarAd
+from Services.AuthService import AuthService  # <--- Olha a estrela do show aqui!
 from Models.UsuarioModel import UsuarioSistema
-
-# Novos imports para conectar no Banco
-from Conexoes import ObterSessaoSqlServer
-from Models.SQL_SERVER.Usuario import Usuario, UsuarioGrupo
 
 # Definição do Blueprint
 AuthBp = Blueprint('Auth', __name__)
@@ -13,67 +9,48 @@ AuthBp = Blueprint('Auth', __name__)
 @AuthBp.route('/Logar', methods=['GET', 'POST'])
 def Login():
     """
-    Rota responsável por exibir o formulário e processar o login.
+    Rota de Login: Agora clean, moderna e cheirosa.
+    O trabalho sujo fica pro AuthService. Aqui a gente só sorri e acena. 👋
     """
     if request.method == 'POST':
         Username = request.form.get('username')
         Password = request.form.get('password')
         
-        # 1. Validação de Credenciais no AD
-        if AutenticarAd(Username, Password): # Se Usuario/Pass corretos no AD
-            # 2. Buscar dados do usuário no SQL Server
-            Sessao = ObterSessaoSqlServer()
-            try:
-                # 2. Busca o usuário no SQL Server para pegar Permissões/Grupo
-                # Fazemos um Left Join com Grupo para garantir que traga mesmo sem grupo
-                Resultado = Sessao.query(Usuario, UsuarioGrupo)\
-                    .outerjoin(UsuarioGrupo, Usuario.codigo_usuariogrupo == UsuarioGrupo.codigo_usuariogrupo)\
-                    .filter(Usuario.Login_Usuario == Username)\
-                    .first()
+        # Chama o nosso "Porteiro" (Service) que resolve tudo (AD + Banco)
+        # Retorna um dict com os dados ou None se falhar
+        DadosUsuario = AuthService.ValidarAcessoCompleto(Username, Password)
 
-                if Resultado:
-                    DadosUsuario, DadosGrupo = Resultado
-                    
-                    # Define nome do grupo ou padrão
-                    NomeGrupo = DadosGrupo.Sigla_UsuarioGrupo if DadosGrupo else "SEM_GRUPO"
+        if DadosUsuario:
+            # Se chegou aqui, o crachá passou! 🎉
+            
+            # Reconstrói o objeto que o Flask-Login gosta
+            UsuarioLogado = UsuarioSistema(
+                Login=DadosUsuario['login'],
+                Nome=DadosUsuario['nome'],
+                Email=DadosUsuario['email'],
+                Grupo=DadosUsuario['grupo'],
+                IdBanco=DadosUsuario['id']
+            )
 
-                    # Cria o objeto de sessão compatível com a nova classe UsuarioSistema
-                    UsuarioLogado = UsuarioSistema(
-                        Login=DadosUsuario.Login_Usuario,
-                        Nome=DadosUsuario.Nome_Usuario,
-                        Email=DadosUsuario.Email_Usuario,
-                        Grupo=NomeGrupo,
-                        IdBanco=DadosUsuario.Codigo_Usuario
-                    )
-
-                    # Efetiva o login no Flask
-                    login_user(UsuarioLogado)
-                    
-                    flash(f'Bem-vindo(a), {DadosUsuario.Nome_Usuario}!', 'success')
-                    
-                    # Redireciona
-                    ProximaPagina = request.args.get('next')
-                    return redirect(ProximaPagina or '/')
-                
-                else:
-                    # Caso autentique no AD mas não tenha cadastro no SQL
-                    flash('Login correto (AD), mas usuário não cadastrado no sistema.', 'warning')
-
-            except Exception as e:
-                print(f"❌ Erro no banco durante login: {e}")
-                flash('Erro técnico ao buscar dados do usuário.', 'danger')
-            finally:
-                if Sessao:
-                    Sessao.close()
+            # Carimba o passaporte
+            login_user(UsuarioLogado)
+            
+            flash(f'Bem-vindo(a) a bordo, {DadosUsuario["nome"]}! ✈️', 'success')
+            
+            # Redireciona para onde o usuário queria ir ou para a Home
+            ProximaPagina = request.args.get('next')
+            return redirect(ProximaPagina or '/')
         
         else:
-            flash('Usuário ou senha inválidos.', 'danger')
+            # Se falhar, a culpa pode ser do AD ou do Banco, mas pro usuário a gente diz isso:
+            flash('Login falhou. Verifique usuário, senha ou se você foi demitido. 😅', 'danger')
 
-    return render_template('Login.html')
+    # Se for GET, só mostra a tela de login (agora na pasta certa!)
+    return render_template('Auth/Login.html')
 
 @AuthBp.route('/Deslogar')
 @login_required
 def Logout():
     logout_user()
-    flash('Você saiu do sistema.', 'info')
+    flash('Você saiu do sistema. Câmbio desligo. 📻', 'info')
     return redirect(url_for('Auth.Login'))

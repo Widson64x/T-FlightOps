@@ -28,6 +28,9 @@ class ConfiguracaoBase:
     PG_PASS = os.getenv("PGDB_PASSWORD", "")
     PG_DRIVER = os.getenv("PGDB_DRIVER", "psycopg") # Ex: psycopg2 ou psycopg (v3)
 
+    AD_SERVER = os.getenv("LDAP_SERVER")
+    AD_DOMAIN = os.getenv("LDAP_DOMAIN")
+    
     # Define se mostra logs de conexão (SQLAlchemy Echo)
     MOSTRAR_LOGS_DB = os.getenv("DB_CONNECT_LOGS", "False").lower() == "true"
 
