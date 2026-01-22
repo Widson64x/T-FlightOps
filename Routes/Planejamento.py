@@ -3,9 +3,9 @@ from flask_login import login_required
 from datetime import timedelta, datetime, date
 
 # Import dos Serviços
-from Services.PlanejamentoService import BuscarCtcsAereoHoje, ObterCtcCompleto, ObterCtcDetalhado
-from Services.GeografiaService import BuscarCoordenadasCidade, BuscarAeroportoMaisProximo
-from Services.MalhaService import BuscarRotasInteligentes
+from Services.PlanejamentoService import PlanejamentoService
+from Services.Shared.GeoService import BuscarCoordenadasCidade, BuscarAeroportoMaisProximo
+from Services.MalhaService import MalhaService
 
 PlanejamentoBp = Blueprint('Planejamento', __name__)
 
@@ -29,18 +29,18 @@ COORDENADAS_UFS = {
 @PlanejamentoBp.route('/Dashboard')
 @login_required
 def Dashboard():
-    return render_template('Planejamento/Dashboard.html')
+    return render_template('Planejamento/Index.html')
 
 @PlanejamentoBp.route('/API/CTCs-Hoje')
 @login_required
 def ApiCtcsHoje():
-    Dados = BuscarCtcsAereoHoje()
+    Dados = PlanejamentoService.BuscarCtcsAereoHoje()
     return jsonify(Dados)
 
 @PlanejamentoBp.route('/API/Ctc-Detalhes/<string:filial>/<string:serie>/<string:ctc>')
 @login_required
 def ApiCtcDetalhes(filial, serie, ctc):
-    Dados = ObterCtcCompleto(filial, serie, ctc)
+    Dados = PlanejamentoService.ObterCtcCompleto(filial, serie, ctc)
     if not Dados:
         return jsonify({'erro': 'CTC não encontrado'}), 404
     return jsonify(Dados)
@@ -50,7 +50,7 @@ def ApiCtcDetalhes(filial, serie, ctc):
 def MontarPlanejamento(filial, serie, ctc):
     
     # 1. Dados
-    DadosCtc = ObterCtcDetalhado(filial, serie, ctc)
+    DadosCtc = PlanejamentoService.ObterCtcDetalhado(filial, serie, ctc)
     if not DadosCtc: return "Não encontrado", 404
 
     # 2. Geografia
@@ -58,7 +58,7 @@ def MontarPlanejamento(filial, serie, ctc):
     CoordDestino = BuscarCoordenadasCidade(DadosCtc['destino_cidade'], DadosCtc['destino_uf'])
     
     if not CoordOrigem or not CoordDestino:
-        return render_template('Planejamento/Montar.html', Erro="Erro Geo", Ctc=DadosCtc)
+        return render_template('Planejamento/Editor.html', Erro="Erro Geo", Ctc=DadosCtc)
 
     # 3. Aeroportos
     AeroOrigem = BuscarAeroportoMaisProximo(CoordOrigem['lat'], CoordOrigem['lon'])
@@ -79,14 +79,14 @@ def MontarPlanejamento(filial, serie, ctc):
         
         for Dias in [3, 10, 30]: # Busca progressiva, 3 dias, 10 dias, 30 dias, se necessário
             DataLimite = DataInicioBusca + timedelta(days=Dias)
-            RotasSugeridas = BuscarRotasInteligentes(
+            RotasSugeridas = MalhaService.BuscarRotasInteligentes(
                 DataInicioBusca, # Vai dar Data/Hora calculada de Emissão do CTC + 10h
                 DataLimite, 
                 AeroOrigem['iata'], AeroDestino['iata']
             )
             if RotasSugeridas: break
 
-    return render_template('Planejamento/Montar.html', 
+    return render_template('Planejamento/Editor.html', 
                            Ctc=DadosCtc, 
                            Origem=CoordOrigem, Destino=CoordDestino,
                            AeroOrigem=AeroOrigem, AeroDestino=AeroDestino,
@@ -95,7 +95,7 @@ def MontarPlanejamento(filial, serie, ctc):
 @PlanejamentoBp.route('/Mapa-Global')
 @login_required
 def MapaGlobal():
-    ListaCtcs = BuscarCtcsAereoHoje()
+    ListaCtcs = PlanejamentoService.BuscarCtcsAereoHoje()
     Agrupamento = {}
 
     print(f"🌍 Gerando Mapa Agrupado para {len(ListaCtcs)} CTCs...")
@@ -138,4 +138,4 @@ def MapaGlobal():
             continue
     
     DadosMapa = list(Agrupamento.values())
-    return render_template('Planejamento/MapaGlobal.html', Dados=DadosMapa)
+    return render_template('Planejamento/Map.html', Dados=DadosMapa)

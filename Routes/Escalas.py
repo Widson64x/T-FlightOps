@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, render_template
 from flask_login import login_required
 from datetime import datetime
-from Services.MalhaService import ObterTotalVoosData
+from Services.MalhaService import MalhaService
 
 EscalasBp = Blueprint('Escalas', __name__)
 
@@ -9,7 +9,7 @@ EscalasBp = Blueprint('Escalas', __name__)
 @login_required
 def Mapa():
     # Renderiza o template que conterá o mapa (antigo mapa da Malha)
-    return render_template('Escalas/Mapa.html')
+    return render_template('Escalas/Index.html')
 
 # 1. Removi '/escalas' da rota pois já está no prefixo do Blueprint em App.py
 # 2. Renomeei a função da rota para não conflitar com nomes de serviço
@@ -19,5 +19,5 @@ def Mapa():
 def ApiVoosHoje():
     Hoje = datetime.now()
     # Chama a função do Service que aceita a data
-    Quantidade = ObterTotalVoosData(Hoje)
+    Quantidade = MalhaService.ObterTotalVoosData(Hoje)
     return jsonify(Quantidade)

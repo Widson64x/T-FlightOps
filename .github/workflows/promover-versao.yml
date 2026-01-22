@@ -1,0 +1,34 @@
+name: Promover Estágio da Versão (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      novo_estagio:
+        description: 'Novo estágio da versão'
+        required: true
+        default: 'Beta'
+        type: choice
+        options:
+        - Beta
+        - Release Candidate
+        - Stable
+
+jobs:
+  promover:
+    runs-on: self-hosted  # Roda no mesmo servidor do deploy
+
+    steps:
+    - name: Executar Promoção
+      shell: powershell
+      run: |
+        $AppPath = "C:\ProjetosPython\T-FlightOps"
+        $Estagio = "${{ inputs.novo_estagio }}"
+        
+        Write-Host "Iniciando promoção para $Estagio..."
+        
+        Set-Location $AppPath
+        
+        # Chama o Python direto da pasta do projeto já implantado
+        cmd /c ".\.venv\Scripts\python.exe Scripts/GestaoVersao.py promover --estagio `"$Estagio`""
+        
+        Write-Host "Promoção concluída!"

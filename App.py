@@ -6,15 +6,16 @@ from Conexoes import ObterSessaoSqlServer
 from Models.SQL_SERVER.Usuario import Usuario, UsuarioGrupo
 from Models.UsuarioModel import UsuarioSistema
 from Configuracoes import ConfiguracaoAtual # Importação da Configuração
+from Services.VersaoService import VersaoService
 
 # Importação das Rotas e Modelos
-from Routes.RotasAutenticacao import AuthBp
-from Routes.RotasMalha import MalhaBp
-from Routes.RotasAeroportos import AeroportoBp
-from Routes.RotasCidades import CidadeBp
-from Routes.RotasEscalas import EscalasBp
-from Routes.RotasPlanejamento import PlanejamentoBp
-from Routes.RotasAcompanhamento import AcompanhamentoBP
+from Routes.Auth import AuthBp
+from Routes.Malha import MalhaBp
+from Routes.Aeroportos import AeroportoBp
+from Routes.Cidades import CidadeBp
+from Routes.Escalas import EscalasBp
+from Routes.Planejamento import PlanejamentoBp
+from Routes.Acompanhamento import AcompanhamentoBP
 
 # --- REGISTRO DE ROTAS (BLUEPRINTS) ---
 # Pega o prefixo definido no .env ou padrão (ex: /T-FlightOps)
@@ -30,6 +31,12 @@ app.secret_key = 'CHAVE_SUPER_SECRETA_DO_PROJETO_VOOS' # Trocar por algo seguro 
 GerenciadorLogin = LoginManager()
 GerenciadorLogin.init_app(app)
 GerenciadorLogin.login_view = 'Auth.Login' # Nome da rota para redirecionar quem não tá logado
+
+@app.context_processor
+def InjetarDadosGlobais():
+    """Disponibiliza a versão para todos os templates HTML"""
+    versao_info = VersaoService.ObterVersaoAtual()
+    return dict(SistemaVersao=versao_info)
 
 @GerenciadorLogin.user_loader
 def CarregarUsuario(UserId):
