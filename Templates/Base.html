@@ -90,11 +90,8 @@
                 </a>
             </nav>
 
-            <div class="version-badge">
-                v{{ SistemaVersao.NumeroVersao }} 
-                <span class="badge badge-{{ 'success' if SistemaVersao.Estagio == 'Stable' else 'warning' }}">
-                    {{ SistemaVersao.Estagio }}
-                </span>
+            <div title="v{{ SistemaVersao.NumeroVersao }} ({{ SistemaVersao.Estagio }})" class="sidebar-footer">
+                <span>v{{ SistemaVersao.NumeroVersao }} ({{ SistemaVersao.Estagio }})</span>
             </div>
         </aside>
 
