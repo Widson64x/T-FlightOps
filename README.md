@@ -178,5 +178,3 @@ O sistema estará disponível em `http://127.0.0.1:5000/`.
 © 2026 T-FlightOps. Todos os direitos reservados.
 
 ```
-
-```
