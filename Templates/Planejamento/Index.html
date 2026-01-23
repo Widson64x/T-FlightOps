@@ -6,7 +6,17 @@
 {% include "Components/_ModalCtc.html" %}
 
 <style>
-    /* --- VARIÁVEIS DO TEMA --- */
+    /* --- 1. SOBRESCREVER O COMPORTAMENTO DA BASE (CRUCIAL) --- */
+    /* Removemos o scroll e o padding da base para assumirmos o controle total aqui */
+    .conteudo-pagina {
+        padding: 0 !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        height: 100% !important;
+    }
+
+    /* --- 2. VARIÁVEIS --- */
     :root {
         --kpi-bg: var(--cor-fundo-painel);
         --table-header-bg: #f8fafc;
@@ -17,16 +27,23 @@
         --text-muted: #64748b;
     }
     
-    /* Layout Principal */
+    /* --- 3. CONTAINER PRINCIPAL FLEXÍVEL --- */
     .monitoring-dashboard {
-        display: flex; flex-direction: column; gap: 20px;
-        height: calc(100vh - 100px);
+        flex: 1; /* Cresce para ocupar TODO o espaço disponível */
+        display: flex; 
+        flex-direction: column; 
+        gap: 20px;
+        padding: 24px; /* O padding volta para cá */
+        height: 100%;
+        overflow: hidden; /* Garante que nada vaze */
+        min-height: 0; /* Fix para Flexbox no Firefox/Chrome */
     }
 
     /* --- CABEÇALHO --- */
     .dash-header {
         display: flex; justify-content: space-between; align-items: flex-end;
         padding-bottom: 20px; border-bottom: 1px solid var(--cor-borda);
+        flex-shrink: 0; /* Impede que o header encolha */
     }
     .header-title h2 {
         font-size: 1.5rem; font-weight: 700; color: var(--cor-texto-principal);
@@ -60,13 +77,19 @@
         border-radius: 8px; font-weight: 600; text-decoration: none;
         display: flex; align-items: center; gap: 10px; transition: all 0.2s;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        white-space: nowrap;
     }
     .btn-action-primary:hover {
         transform: translateY(-2px); background: #000;
     }
 
-    /* --- KPIS --- */
-    .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    /* --- KPIS RESPONSIVOS --- */
+    .kpi-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); 
+        gap: 20px; 
+        flex-shrink: 0; /* Impede que os KPIs encolham */
+    }
     .kpi-card {
         background: var(--kpi-bg); border: 1px solid var(--cor-borda);
         border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px;
@@ -75,22 +98,25 @@
     .kpi-icon {
         width: 48px; height: 48px; border-radius: 10px;
         display: flex; align-items: center; justify-content: center; font-size: 1.8rem;
+        flex-shrink: 0;
     }
     .icon-blue { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
     .icon-orange { background: rgba(249, 115, 22, 0.1); color: #f97316; }
     .icon-green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
     
-    .kpi-info { display: flex; flex-direction: column; }
-    .kpi-label { font-size: 0.75rem; text-transform: uppercase; font-weight: 600; color: var(--text-muted); }
-    .kpi-value { font-size: 1.4rem; font-weight: 700; color: var(--cor-texto-principal); margin-top: 2px; }
+    .kpi-info { display: flex; flex-direction: column; overflow: hidden; }
+    .kpi-label { font-size: 0.75rem; text-transform: uppercase; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+    .kpi-value { font-size: 1.4rem; font-weight: 700; color: var(--cor-texto-principal); margin-top: 2px; white-space: nowrap; }
 
-    /* --- BARRA DE FERRAMENTAS (NOVO) --- */
+    /* --- BARRA DE FERRAMENTAS --- */
     .toolbar-container {
         display: flex; gap: 12px; align-items: center;
-        margin-bottom: -10px; /* Aproxima da tabela */
+        margin-bottom: -10px; 
+        flex-wrap: wrap;
+        flex-shrink: 0;
     }
     .search-group {
-        position: relative; flex: 1; max-width: 400px;
+        position: relative; flex: 1; min-width: 250px;
     }
     .search-group i {
         position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
@@ -111,21 +137,31 @@
         font-size: 0.85rem; outline: none; cursor: pointer;
     }
 
-    /* --- TABELA --- */
+    /* --- 4. CONTAINER DA TABELA (AUTO-GROW) --- */
     .table-container {
-        flex: 1; background: var(--cor-fundo-painel);
+        flex: 1; /* Este é o segredo: ocupa todo o espaço vertical restante */
+        min-height: 0; /* Permite que o flex child tenha scroll interno */
+        background: var(--cor-fundo-painel);
         border: 1px solid var(--cor-borda); border-radius: 12px;
-        overflow: hidden; display: flex; flex-direction: column;
+        display: flex; flex-direction: column;
+        overflow: hidden; /* Corta o que passar */
         box-shadow: 0 4px 20px rgba(0,0,0,0.03);
     }
-    .table-scroll-area { flex: 1; overflow: auto; }
+    
+    .table-scroll-area { 
+        flex: 1; 
+        overflow: auto; /* Scroll aparece SOMENTE AQUI */
+        width: 100%;
+    }
+    
     .flight-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; white-space: nowrap; }
 
-    /* Ordenação nos Headers */
+    /* Header Fixo */
     .flight-table th {
         background: var(--table-header-bg); color: var(--text-muted);
         font-weight: 600; text-transform: uppercase; font-size: 0.75rem;
-        padding: 16px; text-align: left; position: sticky; top: 0; z-index: 10;
+        padding: 16px; text-align: left; 
+        position: sticky; top: 0; z-index: 10;
         border-bottom: 1px solid var(--cor-borda);
         cursor: pointer; user-select: none; transition: background 0.2s;
     }
@@ -137,7 +173,7 @@
     .flight-table td { padding: 14px 16px; border-bottom: 1px solid var(--cor-borda); color: var(--cor-texto-principal); vertical-align: middle; }
     .flight-table tr:hover td { background: var(--table-row-hover); }
 
-    /* Colunas Específicas */
+    /* Colunas */
     .col-ctc { font-family: 'Monaco', monospace; font-weight: 700; color: var(--cor-primaria); }
     .col-route { font-weight: 600; display: flex; align-items: center; gap: 6px; }
     .col-route i { color: var(--text-muted); font-size: 0.8rem; }

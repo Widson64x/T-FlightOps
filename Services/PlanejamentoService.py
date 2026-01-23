@@ -63,7 +63,7 @@ class PlanejamentoService:
         """
         Sessao = ObterSessaoSqlServer()
         try:
-            Hoje = date.today() - timedelta(days=1) # Ajuste para pegar os CTCs do dia atual
+            Hoje = date.today() - timedelta(days=0) 
             Inicio = datetime.combine(Hoje, time.min)
             Fim = datetime.combine(Hoje, time.max)
             
@@ -71,7 +71,7 @@ class PlanejamentoService:
                 Ctc.data >= Inicio,
                 Ctc.data <= Fim,
                 Ctc.tipodoc != 'COB',
-                # Ctc.motivodoc != 'DEV', # Retirando Devolução
+                Ctc.motivodoc != 'DEV', # Retirando Devolução
                 Ctc.modal.like('AEREO%')
             ).order_by(
                 desc(Ctc.data),
