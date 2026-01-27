@@ -1,5 +1,5 @@
-from flask import Blueprint, render_template, jsonify
-from flask_login import login_required
+from flask import Blueprint, render_template, jsonify, request
+from flask_login import login_required, current_user
 from datetime import timedelta, datetime, date
 
 # Import dos Serviços
@@ -49,7 +49,7 @@ def ApiCtcDetalhes(filial, serie, ctc):
 @login_required
 def MontarPlanejamento(filial, serie, ctc):
     
-    # 1. Dados
+    # 1. Busca Dados do CTC Principal
     DadosCtc = PlanejamentoService.ObterCtcDetalhado(filial, serie, ctc)
     if not DadosCtc: return "Não encontrado", 404
 
@@ -60,37 +60,89 @@ def MontarPlanejamento(filial, serie, ctc):
     if not CoordOrigem or not CoordDestino:
         return render_template('Planejamento/Editor.html', Erro="Erro Geo", Ctc=DadosCtc)
 
-    # 3. Aeroportos
+    # 3. Consolidação
+    CtcsCandidatos = PlanejamentoService.BuscarCtcsConsolidaveis(
+        DadosCtc['origem_cidade'], 
+        DadosCtc['origem_uf'],
+        DadosCtc['destino_cidade'], 
+        DadosCtc['destino_uf'],
+        DadosCtc['data_emissao_real'],
+        filial,
+        ctc
+    )
+    
+    # Unifica (Apenas memória, NÃO GRAVA AINDA)
+    DadosUnificados = PlanejamentoService.UnificarConsolidacao(DadosCtc, CtcsCandidatos)
+
+    # --- REMOVIDO O BLOCO DE PERSISTÊNCIA AUTOMÁTICA DAQUI ---
+
+    # 4. Aeroportos
     AeroOrigem = BuscarAeroportoMaisProximo(CoordOrigem['lat'], CoordOrigem['lon'])
     AeroDestino = BuscarAeroportoMaisProximo(CoordDestino['lat'], CoordDestino['lon'])
 
-    # 4. Busca
+    # 5. Busca de Rotas
     RotasSugeridas = []
     if AeroOrigem and AeroDestino:
-        """
-            AQUI O SEGREDO: Usamos a data calculada onde temos a hora real + margem (10 horas após a Emissão),
-            conforme implementado em Services/PlanejamentoService.py para fazer A busca de rotas inteligentes a 
-            partir dessa data/hora. Isso garante que não traremos voos que já partiram. E garantimos que a busca 
-            sempre trará resultados, aumentando o intervalo de dias se necessário (3, 10, 30).
-        """
-
-        DataInicioBusca = DadosCtc['data_busca'] 
-        print(f"🔍 Buscando rotas inteligentes de {AeroOrigem['iata']} para {AeroDestino['iata']} a partir de {DataInicioBusca}...")
-        
-        for Dias in [3, 10, 30]: # Busca progressiva, 3 dias, 10 dias, 30 dias, se necessário
+        DataInicioBusca = DadosUnificados['data_busca'] 
+        for Dias in [3, 10, 30]:
             DataLimite = DataInicioBusca + timedelta(days=Dias)
             RotasSugeridas = MalhaService.BuscarRotasInteligentes(
-                DataInicioBusca, # Vai dar Data/Hora calculada de Emissão do CTC + 10h
-                DataLimite, 
-                AeroOrigem['iata'], AeroDestino['iata']
+                DataInicioBusca, DataLimite, AeroOrigem['iata'], AeroDestino['iata']
             )
             if RotasSugeridas: break
 
     return render_template('Planejamento/Editor.html', 
-                           Ctc=DadosCtc, 
+                           Ctc=DadosUnificados, 
                            Origem=CoordOrigem, Destino=CoordDestino,
                            AeroOrigem=AeroOrigem, AeroDestino=AeroDestino,
                            Rotas=RotasSugeridas)
+
+@PlanejamentoBp.route('/API/Salvar', methods=['POST'])
+@login_required
+def SalvarPlanejamento():
+    try:
+        dados_front = request.json
+        if not dados_front: return jsonify({'sucesso': False}), 400
+
+        filial = dados_front.get('filial')
+        serie = dados_front.get('serie')
+        ctc = dados_front.get('ctc')
+        
+        # Recebe a lista completa de voos (rota)
+        rota_completa = dados_front.get('rota_completa', []) 
+        
+        # ... (Busca CTC e Consolidações igual antes) ...
+        DadosCtc = PlanejamentoService.ObterCtcDetalhado(filial, serie, ctc)
+        CtcsCandidatos = PlanejamentoService.BuscarCtcsConsolidaveis(
+            DadosCtc['origem_cidade'], DadosCtc['origem_uf'],
+            DadosCtc['destino_cidade'], DadosCtc['destino_uf'],
+            DadosCtc['data_emissao_real'], filial, ctc
+        )
+        DadosUnificados = PlanejamentoService.UnificarConsolidacao(DadosCtc, CtcsCandidatos)
+        
+        # Geografia
+        CoordOrigem = BuscarCoordenadasCidade(DadosCtc['origem_cidade'], DadosCtc['origem_uf'])
+        CoordDestino = BuscarCoordenadasCidade(DadosCtc['destino_cidade'], DadosCtc['destino_uf'])
+        AeroOrigem = BuscarAeroportoMaisProximo(CoordOrigem['lat'], CoordOrigem['lon']) if CoordOrigem else None
+        AeroDestino = BuscarAeroportoMaisProximo(CoordDestino['lat'], CoordDestino['lon']) if CoordDestino else None
+        
+        # Grava
+        Id = PlanejamentoService.RegistrarPlanejamento(
+            DadosUnificados, 
+            CtcsCandidatos, 
+            current_user.id if current_user.is_authenticated else "Anonimo",
+            status_inicial='Em Planejamento',
+            aero_origem=AeroOrigem['iata'] if AeroOrigem else None,
+            aero_destino=AeroDestino['iata'] if AeroDestino else None,
+            lista_trechos=rota_completa # <--- Passa a lista
+        )
+        
+        if Id: return jsonify({'sucesso': True, 'id_planejamento': Id})
+        return jsonify({'sucesso': False, 'msg': 'Erro ao gravar'}), 500
+
+    except Exception as e:
+        print(f"Erro: {e}")
+        return jsonify({'sucesso': False, 'msg': str(e)}), 500
     
 @PlanejamentoBp.route('/Mapa-Global')
 @login_required

@@ -7,7 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from Conexoes import ObterSessaoSqlServer
 from Models.SQL_SERVER.Awb import Awb, AwbStatus
-from Models.SQL_SERVER.Ctc import Ctc
+from Models.SQL_SERVER.Ctc import CtcEsp
 
 Sessao = ObterSessaoSqlServer()
 
