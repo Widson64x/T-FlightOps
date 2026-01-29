@@ -98,7 +98,7 @@ class PlanejamentoService:
             LogService.Debug("PlanejamentoService", "Iniciando busca de CTCs Aéreos de Hoje/Ontem...")
             
             # 1. BUSCA DADOS NO SQL SERVER (CTCs DO DIA) + JOIN COM CPL
-            Hoje = date.today() - timedelta(days=0) 
+            Hoje = date.today() - timedelta(days=0) # Ajuste de dias se necessário
             Inicio = datetime.combine(Hoje, time.min)
             Fim = datetime.combine(Hoje, time.max)
             
