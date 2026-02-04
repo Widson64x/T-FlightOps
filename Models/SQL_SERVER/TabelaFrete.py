@@ -1,9 +1,7 @@
 from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from Models.SQL_SERVER.Base import Base
 
 class RemessaFrete(Base):
     __tablename__ = 'Tb_PLN_RemessaFrete'

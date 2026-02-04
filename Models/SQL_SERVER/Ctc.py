@@ -1,7 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from Models.SQL_SERVER.Base import Base
 
 class CtcEsp(Base):
     # Apontamento Cross-Database (Banco 'intec', schema 'dbo', tabela 'tb_ctc_esp')

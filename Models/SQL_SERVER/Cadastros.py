@@ -1,7 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean, Text
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from Models.SQL_SERVER.Base import Base
 
 class AeroportoLocal(Base):
     __tablename__ = 'tb_aircadlocal'

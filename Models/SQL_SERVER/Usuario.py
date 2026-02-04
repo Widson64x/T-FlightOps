@@ -1,8 +1,5 @@
 from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-
-# Cria a base para os modelos ORM
-Base = declarative_base()
+from Models.SQL_SERVER.Base import Base
 
 # Modelo ORM para a tabela de usuários
 class Usuario(Base):

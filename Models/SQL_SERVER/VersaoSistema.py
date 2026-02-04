@@ -1,8 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text
 from datetime import datetime
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from Models.SQL_SERVER.Base import Base
 
 class VersaoSistema(Base):
     __tablename__ = 'Tb_PLN_VersaoSistema'
