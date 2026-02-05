@@ -1,7 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Numeric, Date, Boolean, Text
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from Models.SQL_SERVER.Base import Base
 
 class Awb(Base):
     __tablename__ = 'tb_airAWB'

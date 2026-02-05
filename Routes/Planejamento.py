@@ -41,15 +41,6 @@ def ApiCtcsHoje():
     Dados = PlanejamentoService.BuscarCtcsAereoHoje()
     return jsonify(Dados)
 
-@PlanejamentoBp.route('/API/Ctc-Detalhes/<string:filial>/<string:serie>/<string:ctc>')
-@login_required
-def ApiCtcDetalhes(filial, serie, ctc):
-    Dados = PlanejamentoService.ObterCtcCompleto(filial, serie, ctc)
-    if not Dados:
-        LogService.Warning("Routes.Planejamento", f"API Detalhes: CTC não encontrado {filial}-{serie}-{ctc}")
-        return jsonify({'erro': 'CTC não encontrado'}), 404
-    return jsonify(Dados)
-
 @PlanejamentoBp.route('/Montar/<string:filial>/<string:serie>/<string:ctc>')
 @login_required
 def MontarPlanejamento(filial, serie, ctc):

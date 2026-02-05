@@ -9,6 +9,7 @@ from Configuracoes import ConfiguracaoAtual # Importação da Configuração
 from Services.VersaoService import VersaoService
 from Services.LogService import LogService
 # Importação das Rotas e Modelos
+from Routes.Global.APIs import GlobalBp
 from Routes.Auth import AuthBp
 from Routes.Malha import MalhaBp
 from Routes.Aeroportos import AeroportoBp
@@ -17,6 +18,7 @@ from Routes.Escalas import EscalasBp
 from Routes.Planejamento import PlanejamentoBp
 from Routes.Acompanhamento import AcompanhamentoBP
 from Routes.TabelasFrete import FreteBp
+from Routes.Reversa import ReversaBp
 
 
 # --- REGISTRO DE ROTAS (BLUEPRINTS) ---
@@ -91,6 +93,8 @@ app.register_blueprint(PlanejamentoBp, url_prefix=f'{Prefix}/Planejamento')
 app.register_blueprint(EscalasBp, url_prefix=f'{Prefix}/Escalas')
 app.register_blueprint(AcompanhamentoBP, url_prefix=f'{Prefix}/Acompanhamento')
 app.register_blueprint(FreteBp, url_prefix=f'{Prefix}/Fretes')
+app.register_blueprint(ReversaBp, url_prefix=f'{Prefix}/Reversa')
+app.register_blueprint(GlobalBp, url_prefix=Prefix)
 
 # Rota principal do Dashboard com o prefixo
 @app.route(f'{Prefix}/')

@@ -1,8 +1,6 @@
 from sqlalchemy import Column, Date, DateTime, Integer, String, Float, func, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from Models.SQL_SERVER.Base import Base
 
 class RemessaAeroportos(Base):
     __tablename__ = 'Tb_PLN_RemessaAeroporto'

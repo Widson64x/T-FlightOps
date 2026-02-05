@@ -42,32 +42,3 @@ def ApiHistorico(numero_awb):
     LogService.Debug("AcompanhamentoRoute", f"API /Historico chamada para {numero_awb}")
     historico = AcompanhamentoService.ObterHistoricoAwb(numero_awb)
     return jsonify(historico)
-
-@AcompanhamentoBP.route('/Api/DetalhesVooModal', methods=['GET'])
-def ApiDetalhesVooModal():
-    numero = request.args.get('numeroVoo')
-    data = request.args.get('dataRef') 
-    
-    LogService.Debug("AcompanhamentoRoute", f"API /DetalhesVooModal chamada para voo {numero} em {data}")
-    detalhes = AcompanhamentoService.BuscarDetalhesVooModal(numero, data)
-    
-    if detalhes:
-        return jsonify({'sucesso': True, 'dados': detalhes})
-    else:
-        return jsonify({'sucesso': False, 'msg': 'Voo não encontrado na malha prevista.'})
-    
-@AcompanhamentoBP.route('/Api/DetalhesAwbModal', methods=['GET'])
-def ApiDetalhesAwbModal():
-    cod_awb = request.args.get('codAwb')
-    LogService.Debug("AcompanhamentoRoute", f"API /DetalhesAwbModal chamada. ID: {cod_awb}")
-    
-    if not cod_awb:
-        LogService.Warning("AcompanhamentoRoute", "API /DetalhesAwbModal chamada sem codAwb.")
-        return jsonify({'sucesso': False, 'msg': 'Código AWB não informado.'})
-        
-    dados = AcompanhamentoService.BuscarDetalhesAwbCompleto(cod_awb)
-    
-    if dados:
-        return jsonify({'sucesso': True, 'dados': dados})
-    else:
-        return jsonify({'sucesso': False, 'msg': 'AWB não encontrada.'})
