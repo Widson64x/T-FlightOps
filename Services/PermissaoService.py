@@ -18,50 +18,52 @@ class PermissaoService:
             return False
 
         # Super Admin Bypass (Opcional)
-        if Usuario.Grupo == 'ADM_SISTEMA': 
+        # Verifica se existe o atributo Grupo antes de comparar
+        if getattr(Usuario, 'Grupo', '') == 'ADM_SISTEMA': 
             return True
 
         Sessao = ObterSessaoSqlServer()
         TemPermissao = False
         
         try:
+            # Força o SQLAlchemy a buscar dados frescos do banco
+            Sessao.expire_all() 
+
             # 1. Busca ID da permissão pela chave
             Permissao = Sessao.query(Tb_PLN_Permissao).filter_by(Chave_Permissao=ChavePermissao).first()
             
             if not Permissao:
                 LogService.Warning("PermissaoService", f"Permissão não cadastrada: {ChavePermissao}")
-                return False # Se não existe a chave, nega por segurança
+                return False 
 
             # 2. Verifica se o GRUPO do usuário possui essa permissão
-            # Assumindo que você consegue pegar o ID do grupo do current_user
-            # Você precisará garantir que current_user tenha Codigo_UsuarioGrupo ou similar carregado
+            IdGrupo = getattr(Usuario, 'codigo_usuariogrupo', getattr(Usuario, 'Id_Grupo_Banco', None))
             
-            # Nota: No seu UsuarioSistema atual, você tem 'Grupo' (Sigla). 
-            # Idealmente, carregue o ID do Grupo no UserLoader do App.py para otimizar.
-            # Aqui farei uma query simplificada assumindo que temos o ID do usuário para buscar seus vinculos
-            
-            # Checa Grupo
-            NoGrupo = Sessao.query(Tb_PLN_PermissaoGrupo).filter(
-                Tb_PLN_PermissaoGrupo.Id_Permissao == Permissao.Id_Permissao,
-                Tb_PLN_PermissaoGrupo.Codigo_UsuarioGrupo == Usuario.Id_Grupo_Banco # Precisa mapear isso no User Object
-            ).count() > 0
+            if IdGrupo:
+                NoGrupo = Sessao.query(Tb_PLN_PermissaoGrupo).filter(
+                    Tb_PLN_PermissaoGrupo.Id_Permissao == Permissao.Id_Permissao,
+                    Tb_PLN_PermissaoGrupo.Codigo_UsuarioGrupo == IdGrupo
+                ).count() > 0
+            else:
+                NoGrupo = False
 
-            # Checa Individual
+            # 3. Checa Individual (Permissão Específica do Usuário)
+            IdUsuario = getattr(Usuario, 'Codigo_Usuario', getattr(Usuario, 'IdBanco', None))
+            
             NoUsuario = Sessao.query(Tb_PLN_PermissaoUsuario).filter(
                 Tb_PLN_PermissaoUsuario.Id_Permissao == Permissao.Id_Permissao,
-                Tb_PLN_PermissaoUsuario.Codigo_Usuario == Usuario.IdBanco
+                Tb_PLN_PermissaoUsuario.Codigo_Usuario == IdUsuario
             ).first()
 
-            # Lógica: Se tem no grupo E NÃO foi revogado explicitamente no usuário (se usar essa lógica)
-            # Ou: Se tem no grupo OU tem no usuário
-            
+            # Lógica de Prevalência
             if NoUsuario:
-                TemPermissao = NoUsuario.Conceder # Prevalece a regra individual (seja true ou false)
+                TemPermissao = NoUsuario.Conceder 
             else:
                 TemPermissao = NoGrupo
 
         except Exception as e:
-            LogService.Error("PermissaoService", "Erro ao validar permissão", e)
+            LogService.Error("PermissaoService", f"Erro ao validar permissão '{ChavePermissao}'", e)
+            TemPermissao = False 
         finally:
             Sessao.close()
             
@@ -71,9 +73,12 @@ class PermissaoService:
     def RegistrarLog(Usuario, Rota, Metodo, Ip, Chave, Permitido):
         Sessao = ObterSessaoSqlServer()
         try:
+            IdUsuario = getattr(Usuario, 'Codigo_Usuario', getattr(Usuario, 'IdBanco', None)) if Usuario.is_authenticated else None
+            NomeUsuario = getattr(Usuario, 'Nome_Usuario', getattr(Usuario, 'Nome', 'Anonimo')) if Usuario.is_authenticated else 'Anonimo'
+
             NovoLog = Tb_PLN_LogAcesso(
-                Id_Usuario=Usuario.IdBanco if Usuario.is_authenticated else None,
-                Nome_Usuario=Usuario.Nome if Usuario.is_authenticated else 'Anonimo',
+                Id_Usuario=IdUsuario,
+                Nome_Usuario=NomeUsuario,
                 Rota_Acessada=Rota,
                 Metodo_Http=Metodo,
                 Ip_Origem=Ip,
@@ -87,6 +92,22 @@ class PermissaoService:
         finally:
             Sessao.close()
 
+    # --- NOVO MÉTODO AUXILIAR ---
+    @staticmethod
+    def ObterCategoriaPermissao(ChavePermissao):
+        """Busca o nome da categoria apenas para exibir no erro"""
+        Sessao = ObterSessaoSqlServer()
+        Categoria = "Geral"
+        try:
+            Perm = Sessao.query(Tb_PLN_Permissao).filter_by(Chave_Permissao=ChavePermissao).first()
+            if Perm and Perm.Categoria_Permissao:
+                Categoria = Perm.Categoria_Permissao
+        except:
+            pass
+        finally:
+            Sessao.close()
+        return Categoria
+
 # --- O DECORATOR ---
 def RequerPermissao(ChavePermissao):
     def Decorator(F):
@@ -95,7 +116,6 @@ def RequerPermissao(ChavePermissao):
             
             Permitido = PermissaoService.VerificarPermissao(current_user, ChavePermissao)
             
-            # Grava Log
             PermissaoService.RegistrarLog(
                 Usuario=current_user,
                 Rota=request.path,
@@ -106,8 +126,12 @@ def RequerPermissao(ChavePermissao):
             )
 
             if not Permitido:
-                flash("Você não tem permissão para acessar este recurso.", "danger")
-                return redirect(url_for('Dashboard')) # Ou renderizar página 403
+                # Busca a categoria para enriquecer a mensagem
+                Categoria = PermissaoService.ObterCategoriaPermissao(ChavePermissao)
+                
+                flash(f"Acesso Negado. Você precisa de permissão no módulo '{Categoria}' para acessar este recurso.", "danger")
+                
+                return redirect(url_for('Dashboard') if current_user.is_authenticated else url_for('Auth.Login'))
             
             return F(*args, **kwargs)
         return Wrapper

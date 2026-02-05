@@ -43,11 +43,13 @@
             <h1 class="section-title">Controle de Acesso</h1>
             <p class="section-subtitle">Gerencie permissões por grupos ou exceções por usuário.</p>
         </div>
+        {% if current_user.TemPermissao('sistema.configuracoes.criar') %}
         <div class="actions">
             <button class="btn btn-primary" onclick="AbrirModalPermissao()">
                 <i class="ph-bold ph-plus"></i> Nova Permissão
             </button>
         </div>
+        {% endif %}
     </div>
 
     <div class="tabs-header">
@@ -130,10 +132,11 @@
 
                                         <label class="switch">
                                             <input type="checkbox" 
-                                                   class="check-perm" 
-                                                   id="chk-{{ perm.Id_Permissao }}"
-                                                   data-id="{{ perm.Id_Permissao }}"
-                                                   onchange="ProcessarClick(this)">
+                                                class="check-perm" 
+                                                id="chk-{{ perm.Id_Permissao }}"
+                                                data-id="{{ perm.Id_Permissao }}"
+                                                onchange="ProcessarClick(this)"
+                                                {% if not current_user.TemPermissao('sistema.configuracoes.editar') %}disabled{% endif %}>
                                             <span class="slider"></span>
                                         </label>
 
@@ -167,11 +170,13 @@
 </div>
 
 <script>
+    const PODE_EDITAR = {{ 'true' if current_user.TemPermissao('sistema.configuracoes.visualizar') else 'false' }};
+
     // ESTADO GLOBAL
     let MODO = 'Grupo'; // 'Grupo' ou 'Usuario'
     let ID_ATUAL = null;
     let DADOS_ATUAIS = null; // Cache dos dados carregados (herança etc)
-
+    
     function MudarAba(novaAba) {
         // 1. Alterna Visual das Abas
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('ativo'));
@@ -205,15 +210,15 @@
             const resp = await fetch("{{ url_for('Configuracoes.BuscarAcessosGrupo') }}?idGrupo=" + id);
             const dados = await resp.json();
             
-            // Renderiza Grupo: Simples (Tem ou Não Tem)
             const ativos = new Set(dados.ids_ativos);
             
             document.querySelectorAll('.check-perm').forEach(chk => {
                 const idPerm = parseInt(chk.dataset.id);
                 chk.checked = ativos.has(idPerm);
-                chk.disabled = false;
                 
-                // Limpa visual de usuário
+                // ALTERAÇÃO AQUI: Só habilita se tiver permissão
+                chk.disabled = !PODE_EDITAR; 
+                
                 ConfigurarVisualUsuario(idPerm, null, null, null); 
             });
 
@@ -231,7 +236,6 @@
             const resp = await fetch("{{ url_for('Configuracoes.BuscarAcessosUsuario') }}?idUsuario=" + id);
             DADOS_ATUAIS = await resp.json();
             
-            // Sets para busca rápida
             const heranca = new Set(DADOS_ATUAIS.heranca_grupo);
             const permitidos = new Set(DADOS_ATUAIS.usuario_permitidos);
             const bloqueados = new Set(DADOS_ATUAIS.usuario_bloqueados);
@@ -239,13 +243,8 @@
             document.querySelectorAll('.check-perm').forEach(chk => {
                 const idPerm = parseInt(chk.dataset.id);
                 
-                // Lógica de Estado Efetivo (O que o usuário "tem" no final das contas)
-                // Se tem Allow Explicito -> Tem (True)
-                // Se tem Block Explicito -> Não Tem (False)
-                // Se não tem nada -> Segue Herança
-                
                 let isChecked = false;
-                let tipoStatus = 'herdado'; // 'herdado', 'forcado', 'bloqueado'
+                let tipoStatus = 'herdado';
 
                 if (permitidos.has(idPerm)) {
                     isChecked = true;
@@ -254,15 +253,15 @@
                     isChecked = false;
                     tipoStatus = 'bloqueado';
                 } else {
-                    // Herança
                     isChecked = heranca.has(idPerm);
                     tipoStatus = 'herdado';
                 }
 
                 chk.checked = isChecked;
-                chk.disabled = false;
+                
+                // ALTERAÇÃO AQUI: Só habilita se tiver permissão
+                chk.disabled = !PODE_EDITAR;
 
-                // Configura Badges e Botão Reset
                 ConfigurarVisualUsuario(idPerm, tipoStatus, isChecked, heranca.has(idPerm));
             });
 
@@ -271,6 +270,13 @@
 
     // --- INTERAÇÃO DO SWITCH ---
     async function ProcessarClick(chk) {
+        // SEGURANÇA EXTRA: Se tentar burlar o HTML via inspecionar elemento
+        if (!PODE_EDITAR) {
+            chk.checked = !chk.checked; // Reverte visualmente
+            alert('Você não tem permissão para editar.');
+            return;
+        }
+
         if (!ID_ATUAL) return;
         const idPerm = chk.dataset.id;
         const novoEstado = chk.checked; // True (Ativar) ou False (Desativar)

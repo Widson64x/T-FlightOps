@@ -10,12 +10,14 @@ ConfiguracoesBp = Blueprint('Configuracoes', __name__)
 
 @ConfiguracoesBp.route('/')
 @login_required
+@RequerPermissao('sistema.configuracoes.visualizar')
 def Index():
     return render_template('Configuracoes/Index.html')
 
 # --- ROTA PRINCIPAL (VIEW) ---
 @ConfiguracoesBp.route('/Permissoes')
 @login_required
+@RequerPermissao('sistema.configuracoes.visualizar')
 def Permissoes():
     Sessao = ObterSessaoSqlServer()
     try:
@@ -56,6 +58,7 @@ def Permissoes():
 # --- API: BUSCAR ACESSOS DE UM GRUPO ---
 @ConfiguracoesBp.route('/Permissoes/BuscarAcessosGrupo')
 @login_required
+@RequerPermissao('sistema.configuracoes.visualizar')
 def BuscarAcessosGrupo():
     IdGrupo = request.args.get('idGrupo')
     Sessao = ObterSessaoSqlServer()
@@ -69,6 +72,7 @@ def BuscarAcessosGrupo():
 # --- API: BUSCAR ACESSOS DE UM USUÁRIO (COM HERANÇA) ---
 @ConfiguracoesBp.route('/Permissoes/BuscarAcessosUsuario')
 @login_required
+@RequerPermissao('sistema.configuracoes.visualizar')
 def BuscarAcessosUsuario():
     IdUsuario = request.args.get('idUsuario')
     Sessao = ObterSessaoSqlServer()
@@ -100,7 +104,7 @@ def BuscarAcessosUsuario():
 # --- API: SALVAR VÍNCULO (GRUPO OU USUÁRIO) ---
 @ConfiguracoesBp.route('/Permissoes/Salvar', methods=['POST'])
 @login_required
-# @RequerPermissao('sistema.permissoes.editar')
+@RequerPermissao('sistema.configuracoes.editar')
 def SalvarVinculo():
     Dados = request.get_json()
     Tipo = Dados.get('Tipo')
@@ -147,6 +151,7 @@ def SalvarVinculo():
 
 @ConfiguracoesBp.route('/Permissoes/CriarNova', methods=['POST'])
 @login_required
+@RequerPermissao('sistema.configuracoes.criar')
 def CriarNovaPermissao():
     Dados = request.form
     # Remove espaços extras e força minúsculo para garantir padrão
