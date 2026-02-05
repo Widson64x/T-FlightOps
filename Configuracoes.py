@@ -11,8 +11,8 @@ class ConfiguracaoBase:
     """
     DIR_BASE = os.path.dirname(os.path.abspath(__file__))
     
-    # Define o prefixo global das rotas (Ex: /T-FlightOps)
-    ROUTE_PREFIX = os.getenv("ROUTE_PREFIX", "/T-FlightOps")
+    # Define o prefixo global das rotas (Ex: /Luft-ConnectAir)
+    ROUTE_PREFIX = os.getenv("ROUTE_PREFIX", "/Luft-ConnectAir")
     
     # --- Configurações do SQL SERVER (Banco de Negócio/ERP) ---
     SQL_HOST = os.getenv("SQL_HOST")
@@ -68,17 +68,17 @@ class ConfiguracaoBase:
 class ConfiguracaoDesenvolvimento(ConfiguracaoBase):
     DEBUG = True
     # Define o nome do banco específico para DEV
-    PG_DB_NAME = os.getenv("PGDB_NAME_DEV", "FlightOps_DEV")
+    PG_DB_NAME = os.getenv("PGDB_NAME_DEV", "Luft-ConnectAir_DEV")
 
 class ConfiguracaoHomologacao(ConfiguracaoBase):
     DEBUG = False
     # Define o nome do banco específico para HOMOLOG
-    PG_DB_NAME = os.getenv("PGDB_NAME_HOMOLOG", "FlightOps_HOMOLOG")
+    PG_DB_NAME = os.getenv("PGDB_NAME_HOMOLOG", "Luft-ConnectAir_HOMOLOG")
 
 class ConfiguracaoProducao(ConfiguracaoBase):
     DEBUG = False
     # Define o nome do banco específico para PROD
-    PG_DB_NAME = os.getenv("PGDB_NAME_PROD", "FlightOps")
+    PG_DB_NAME = os.getenv("PGDB_NAME_PROD", "Luft-ConnectAir")
 
 # Mapa de seleção do ambiente
 MapaConfiguracao = {

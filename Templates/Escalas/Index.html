@@ -1,6 +1,6 @@
 {% extends "Base.html" %}
 
-{% block titulo %}Mapa de Escalas | FlightOps{% endblock %}
+{% block titulo %}Mapa de Escalas | Luft-ConnectAir{% endblock %}
 
 {% block conteudo %}
 
@@ -279,7 +279,7 @@
         L.control.zoom({ position: 'topright' }).addTo(map);
         
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; FlightOps', maxZoom: 19
+            attribution: '&copy; Luft-ConnectAir', maxZoom: 19
         }).addTo(map);
 
         layerAeroportos = L.layerGroup().addTo(map);

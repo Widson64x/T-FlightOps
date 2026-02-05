@@ -1,4 +1,4 @@
-name: Deploy Automatico T-FlightOps
+name: Deploy Automatico Luft-ConnectAir
 
 on:
   push:
@@ -23,8 +23,8 @@ jobs:
         PYTHONIOENCODING: "utf-8"  # Garante a saída do console em UTF-8
       run: |
         # --- CONFIGURAÇÕES ---
-        $ServiceName = "Luft-FlightOps"
-        $AppPath = "C:\ProjetosPython\T-FlightOps"
+        $ServiceName = "Luft-ConnectAir"
+        $AppPath = "C:\ProjetosPython\Luft-ConnectAir"
         $LogFile = "C:\actions-runner\deploy-log.txt"
         
         # Inicia Log
