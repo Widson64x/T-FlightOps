@@ -22,7 +22,7 @@ jobs:
     - name: Executar Promoção
       shell: powershell
       run: |
-        $AppPath = "C:\ProjetosPython\T-FlightOps"
+        $AppPath = "C:\ProjetosPython\Luft-ConnectAir"
         $Estagio = "${{ inputs.novo_estagio }}"
         
         Write-Host "Iniciando promoção para $Estagio..."

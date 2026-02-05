@@ -1,6 +1,6 @@
 {% extends "Base.html" %}
 
-{% block titulo %}Gestão de Reversa | FlightOps{% endblock %}
+{% block titulo %}Gestão de Reversa | Luft-ConnectAir{% endblock %}
 
 {% block conteudo %}
 {% include "Components/_ModalCtc.html" %}
@@ -473,7 +473,7 @@
         el.disabled = true;
 
         try {
-            const response = await fetch('/T-FlightOps/Reversa/AtualizarStatus', {
+            const response = await fetch('/Luft-ConnectAir/Reversa/AtualizarStatus', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

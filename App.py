@@ -23,7 +23,7 @@ from Routes.Global.Configuracoes import ConfiguracoesBp
 
 
 # --- REGISTRO DE ROTAS (BLUEPRINTS) ---
-# Pega o prefixo definido no .env ou padrão (ex: /T-FlightOps)
+# Pega o prefixo definido no .env ou padrão (ex: /Luft-ConnectAir)
 Prefix = ConfiguracaoAtual.ROUTE_PREFIX
 
 app = Flask(__name__,
@@ -84,7 +84,7 @@ def CarregarUsuario(UserId):
 
     return UsuarioEncontrado
 
-# O Auth geralmente fica separado, ex: /T-FlightOps/auth
+# O Auth geralmente fica separado, ex: /Luft-ConnectAir/auth
 app.register_blueprint(AuthBp, url_prefix=f'{Prefix}/auth')
 
 # Os demais módulos assumem o prefixo base, pois suas rotas internas já possuem nomes (ex: /malha/...)

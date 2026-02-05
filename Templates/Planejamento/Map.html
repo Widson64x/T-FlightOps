@@ -1,6 +1,6 @@
 {% extends "Base.html" %}
 
-{% block titulo %}Torre de Controle Global | FlightOps{% endblock %}
+{% block titulo %}Torre de Controle Global | Luft-ConnectAir{% endblock %}
 
 {% block conteudo %}
 {% include "Components/_ModalCtc.html" %}
@@ -175,7 +175,7 @@
         L.control.zoom({position: 'topright'}).addTo(map);
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: 'FlightOps', maxZoom: 18
+            attribution: 'Luft-ConnectAir', maxZoom: 18
         }).addTo(map);
 
         dadosEstados.forEach(est => {

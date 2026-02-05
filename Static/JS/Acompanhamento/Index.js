@@ -1,6 +1,6 @@
 /**
  * Arquivo: dashboard.js
- * Responsável pela lógica do Painel de Acompanhamento (FlightOps)
+ * Responsável pela lógica do Painel de Acompanhamento (Luft-ConnectAir)
  */
 
 var map = null;
@@ -25,7 +25,7 @@ function InitMap() {
     if(map) return;
     map = L.map('mapa-voos', { zoomControl: false }).setView([-14.2350, -51.9253], 4);
     L.control.zoom({ position: 'topright' }).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; FlightOps', maxZoom: 18 }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; Luft-ConnectAir', maxZoom: 18 }).addTo(map);
     layerGeral.addTo(map);
     layerFoco.addTo(map);
 }

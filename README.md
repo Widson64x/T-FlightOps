@@ -1,7 +1,7 @@
 ```markdown
-# ✈️ T-FlightOps
+# ✈️ Luft-ConnectAir
 
-**T-FlightOps** é um sistema web robusto de Operações de Voo, desenvolvido para gerenciar e planejar malhas aéreas, escalas, aeroportos e acompanhamento de cargas e voos. O sistema utiliza uma arquitetura modular baseada em Python (Flask), integrando-se com bancos de dados SQL Server e PostgreSQL para garantir integridade e eficiência operacional.
+**Luft-ConnectAir** é um sistema web robusto de Operações de Voo, desenvolvido para gerenciar e planejar malhas aéreas, escalas, aeroportos e acompanhamento de cargas e voos. O sistema utiliza uma arquitetura modular baseada em Python (Flask), integrando-se com bancos de dados SQL Server e PostgreSQL para garantir integridade e eficiência operacional.
 
 ---
 
@@ -23,7 +23,7 @@ O projeto foi construído utilizando uma stack moderna e eficiente:
 Abaixo segue a árvore de diretórios do projeto, detalhando a organização dos módulos, rotas e serviços.
 
 ```text
-T-FlightOps/
+Luft-ConnectAir/
 ├── .env                       # Variáveis de ambiente
 ├── .gitignore                 # Arquivos ignorados pelo Git
 ├── App.py                     # Ponto de entrada da aplicação (Flask App)
@@ -128,8 +128,8 @@ Certifique-se de ter o Python instalado.
 
 1. **Clonar o repositório:**
 ```bash
-git clone https://seu-repositorio/T-FlightOps.git
-cd T-FlightOps
+git clone https://seu-repositorio/Luft-ConnectAir.git
+cd Luft-ConnectAir
 
 ```
 
@@ -175,4 +175,4 @@ O sistema estará disponível em `http://127.0.0.1:5000/`.
 
 ---
 
-© 2026 T-FlightOps. Todos os direitos reservados.
+© 2026 Luft-ConnectAir. Todos os direitos reservados.

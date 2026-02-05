@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Services.VersaoService import VersaoService
 
 def Executar():
-    parser = argparse.ArgumentParser(description='Gestão de Versionamento do T-FlightOps')
+    parser = argparse.ArgumentParser(description='Gestão de Versionamento do Luft-ConnectAir')
     
     subparsers = parser.add_subparsers(dest='comando', help='Comandos disponíveis')
 

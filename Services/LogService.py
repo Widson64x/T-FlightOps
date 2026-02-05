@@ -26,7 +26,7 @@ class LogService:
         caminho_geral = os.path.join(ConfiguracaoAtual.DIR_LOGS, "application.log")
 
         # Configuração do Logger Principal
-        logger = logging.getLogger("FlightOps")
+        logger = logging.getLogger("Luft-ConnectAir")
         logger.setLevel(logging.DEBUG if ConfiguracaoAtual.DEBUG else logging.INFO)
         logger.handlers = []  # Limpa handlers anteriores para evitar duplicação
         logger.propagate = False
@@ -66,7 +66,7 @@ class LogService:
         if not LogService._logger:
             LogService.Inicializar()
         # Retorna um adaptador para injetar o nome da origem (Classe/Modulo) no log
-        return logging.getLogger(f"FlightOps.{origem}")
+        return logging.getLogger(f"Luft-ConnectAir.{origem}")
 
     @staticmethod
     def Info(origem, mensagem):
