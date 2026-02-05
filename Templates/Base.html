@@ -105,7 +105,8 @@
                 
                 <div class="menu-divider"></div>
 
-                <a href="#" class="menu-link">
+                <a href="{{ url_for('Configuracoes.Index') }}" 
+                   class="menu-link {{ 'ativo' if request.endpoint and 'Configuracoes' in request.endpoint else '' }}">
                     <div class="link-content">
                         <i class="ph-bold ph-gear"></i>
                         <span class="link-text">Configurações</span>
