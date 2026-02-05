@@ -170,7 +170,7 @@
 </div>
 
 <script>
-    const PODE_EDITAR = {{ 'true' if current_user.TemPermissao('sistema.configuracoes.visualizar') else 'false' }};
+    const PODE_EDITAR = {{ 'true' if current_user.TemPermissao('sistema.configuracoes.editar') else 'false' }};
 
     // ESTADO GLOBAL
     let MODO = 'Grupo'; // 'Grupo' ou 'Usuario'
