@@ -300,7 +300,7 @@ class AcompanhamentoService:
     # --- MODAL VOO (MALHA PREVISTA) ---
     @staticmethod
     def BuscarDetalhesVooModal(numero_voo, data_ref_str):
-        session_pg = ObterSessaoSqlServer()
+        session = ObterSessaoSqlServer()
         try:
             voo_numerico = AcompanhamentoService._LimparNumeroVoo(numero_voo)
             if not voo_numerico: return None
@@ -311,11 +311,13 @@ class AcompanhamentoService:
                 except: data_busca = datetime.now().date()
 
             def query_voo(data):
-                return session_pg.query(VooMalha).join(RemessaMalha)\
+                # FIX: Substituido regexp_replace (Postgres) por LIKE (SQL Server)
+                # Como voo_numerico contem apenas digitos, buscamos se o campo contem esses digitos
+                return session.query(VooMalha).join(RemessaMalha)\
                     .filter(
                         RemessaMalha.Ativo == True,
                         cast(VooMalha.DataPartida, Date) == data,
-                        func.regexp_replace(VooMalha.NumeroVoo, r'\D', '', 'g') == voo_numerico
+                        VooMalha.NumeroVoo.like(f"%{voo_numerico}")
                     ).first()
 
             voo = query_voo(data_busca)
@@ -343,4 +345,4 @@ class AcompanhamentoService:
         except Exception as e:
             LogService.Error("AcompanhamentoService", f"Erro ao buscar detalhes do voo modal {numero_voo}", e)
             return None
-        finally: session_pg.close()
+        finally: session.close()

@@ -29,6 +29,16 @@
             </div>
         </a>
 
+        <a href="{{ url_for('Configuracoes.GerenciarCias') }}" class="config-card">
+            <div class="card-icon" style="background: rgba(var(--cor-sucesso-rgb), 0.1); color: var(--cor-sucesso);">
+                <i class="ph-bold ph-airplane-tilt"></i>
+            </div>
+            <div class="card-info">
+                <h3>Índice de Prioridade (Parcerias)</h3>
+                <p>Defina o nível de preferência para cada companhia aérea parceira. O sistema priorizará rotas com cias de maior índice, mesmo que custo/tempo sejam levemente superiores.</p>
+            </div>
+        </a>
+
         <a href="#" class="config-card" onclick="AlternarTema(); return false;">
             <div class="card-icon" style="background: rgba(var(--cor-aviso-rgb), 0.1); color: var(--cor-aviso);">
                 <i class="ph-bold ph-paint-brush-broad"></i>

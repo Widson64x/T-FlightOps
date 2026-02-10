@@ -189,3 +189,29 @@ class TabelaFreteService:
                 except Exception as e:
                     LogService.Warning("TabelaFreteService", f"Não foi possível remover temp: {e}")
             Sessao.close()
+            
+    @staticmethod
+    def CalcularCustoEstimado(origem, destino, cia, peso):
+        """
+        Busca a tarifa na tabela e calcula o custo total.
+        Retorna (CustoTotal, TarifaEncontrada). Se não achar, retorna (0.0, 0.0).
+        """
+        Sessao = ObterSessaoSqlServer()
+        try:
+            # Tenta buscar tarifa específica
+            Item = Sessao.query(TabelaFrete).join(RemessaFrete).filter(
+                RemessaFrete.Ativo == True,
+                TabelaFrete.Origem == origem,
+                TabelaFrete.Destino == destino,
+                TabelaFrete.CiaAerea == cia
+            ).first()
+            if Item and Item.Tarifa:
+                Custo = float(Item.Tarifa) * float(peso) # Valor total = tarifa * peso
+                return Custo, float(Item.Tarifa)
+            
+            return 0.0, 0.0
+        except Exception as e:
+            LogService.Error("TabelaFreteService", f"Erro calc custo {origem}->{destino}", e)
+            return 0.0, 0.0
+        finally:
+            Sessao.close()

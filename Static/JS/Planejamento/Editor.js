@@ -1,312 +1,270 @@
 /**
- * Editor.js
- * Lógica de Mapas, Animação e Interação do Planejamento Visual
+ * Editor.js - Cockpit de Planejamento Visual (Versão Glass)
  */
 
-// --- EXTENSÕES DO LEAFLET (Interpolation) ---
-L.interpolatePosition = function(t, i, n, o) {
-    var e = o / n;
-    e = e > 0 ? e : 0, e = e > 1 ? 1 : e;
-    return L.latLng(t.lat + e * (i.lat - t.lat), t.lng + e * (i.lng - t.lng))
+let map;
+let routeLayerGroup; 
+let currentState = {
+    estrategia: 'recomendada',
+    rotaSelecionada: null
 };
 
-L.Marker.MovingMarker = L.Marker.extend({
-    initialize: function(t, i, n) {
-        L.Marker.prototype.initialize.call(this, t[0], n), this._latlngs = t.map(t => L.latLng(t)), this._durations = i, this._currentDuration = 0, this._currentIndex = 0, this._state = null, this._startTime = 0, this._startTimeStamp = 0, this._pauseStartTime = 0, this._animId = 0, this._animRequested = !1, this._currentLine = []
-    },
-    isRunning: function() { return "run" === this._state },
-    isPaused: function() { return "paused" === this._state },
-    isEnded: function() { return "ended" === this._state },
-    start: function() { this.isRunning() || (this.isPaused() ? this.resume() : (this._loadLine(0), this._startAnimation(), this.fire("start"))) },
-    resume: function() { this.isPaused() && (this._currentLine[0] = this.getLatLng(), this._currentDuration -= this._pauseStartTime - this._startTime, this._startAnimation()) },
-    pause: function() { this.isRunning() && (this._pauseStartTime = Date.now(), this._state = "paused", this._stopAnimation(), this._updatePosition()) },
-    stop: function(t) { this.isEnded() || (this._stopAnimation(), void 0 === t && (t = 0, this._updatePosition()), this._state = "ended", this.fire("end", { elapsedTime: t })) },
-    _startAnimation: function() { this._state = "run", this._animId = L.Util.requestAnimFrame(function(t) { this._startTime = Date.now(), this._startTimeStamp = t, this._animate(t) }, this), this._animRequested = !0 },
-    _stopAnimation: function() { this._animRequested && (L.Util.cancelAnimFrame(this._animId), this._animRequested = !1) },
-    _loadLine: function(t) { this._currentIndex = t, this._currentDuration = this._durations[t], this._currentLine = [this._latlngs[t], this._latlngs[t + 1]] },
-    _updatePosition: function() { var t = Date.now() - this._startTime; this._animate(this._startTimeStamp + t, !0) },
-    _animate: function(t, i) {
-        this._animRequested = !1;
-        var n = Date.now() - this._startTime, o = this._currentDuration;
-        if (n < o) {
-            var e = L.interpolatePosition(this._currentLine[0], this._currentLine[1], o, n);
-            this.setLatLng(e), i || (this._animId = L.Util.requestAnimFrame(this._animate, this), this._animRequested = !0)
-        } else this.setLatLng(this._currentLine[1]), this._currentIndex < this._latlngs.length - 2 ? (this._loadLine(this._currentIndex + 1), this._startAnimation()) : (this._state = "ended", this.fire("end", { elapsedTime: n }))
-    },
-    addLatLng: function(t, i) { this._latlngs.push(L.latLng(t)), this._durations.push(i) },
-    moveTo: function(t, i) { this._stopAnimation(), this._latlngs = [this.getLatLng(), L.latLng(t)], this._durations = [i], this.start() }
+document.addEventListener('DOMContentLoaded', () => {
+    initMap();
+    // Inicia selecionando a estratégia recomendada com um pequeno delay para efeito visual
+    setTimeout(() => SelecionarEstrategia('recomendada'), 300);
 });
-L.Marker.movingMarker = function(t, i, n) { return new L.Marker.MovingMarker(t, i, n) };
 
+// --- 1. Inicialização do Mapa ---
+function initMap() {
+    // Fallback para centro do Brasil se coords zeradas
+    const lat = window.origemCoords.lat || -15.79;
+    const lon = window.origemCoords.lon || -47.88;
 
-// --- VARIÁVEIS GLOBAIS DE CONTROLE ---
-let map, markerAnim;
-let vooSelecionado = null;
+    map = L.map('map', { zoomControl: false, attributionControl: false }).setView([lat, lon], 5);
 
+    // Tiles (CartoDB Voyager - Clean & Modern)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+    }).addTo(map);
 
-// --- FUNÇÕES DE TEMPLATE (POPUPS) ---
-function GetPopupCtc() {
-    // Usa a variável global 'ctc' definida no HTML
-    return `
-        <div class="pop-header"><span>CTC ${ctc.ctc}</span><i class="ph-fill ph-truck"></i></div>
-        <div class="pop-body">
-            <div class="pop-row"><span style="color:var(--cor-texto-secundario)">Volumes:</span> <strong>${ctc.volumes}</strong></div>
-            <div class="pop-row"><span style="color:var(--cor-texto-secundario)">Peso:</span> <strong>${ctc.peso}kg</strong></div>
-            <div style="margin-top:10px; text-align:center;">
-                <button onclick="AbrirModalGlobal('${ctc.filial}', '${ctc.serie}', '${ctc.ctc}')" style="background:var(--cor-primaria); color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:0.8rem; font-weight:600;">Ver Detalhes</button>
-            </div>
-        </div>
-    `;
-}
-
-function GetPopupLocal(t, n, u) {
-    return `<div class="pop-header"><span>${t}</span><i class="ph-fill ph-map-pin"></i></div><div class="pop-body"><div style="font-weight:700; margin-bottom:4px;">${n}</div><div style="color:var(--cor-texto-secundario);">${u}</div></div>`;
-}
-
-function GetPopupAero(i, n) {
-    return `<div class="pop-header"><span>${i}</span><i class="ph-fill ph-airplane"></i></div><div class="pop-body">${n}</div>`;
-}
-
-function criarIcone(tipo) {
-    let cls = 'pin-truck', ico = 'ph-truck';
-    if (tipo === 'origem') { cls = 'pin-origem'; ico = 'ph-package'; }
-    if (tipo === 'destino') { cls = 'pin-destino'; ico = 'ph-flag-checkered'; }
-    if (tipo === 'plane') { cls = 'pin-plane'; ico = 'ph-airplane-tilt'; }
-    return L.divIcon({
-        className: 'custom-div-icon',
-        html: `<div class="marker-pin ${cls}"><i class="ph-fill ${ico}"></i></div>`,
-        iconSize: [40, 50], iconAnchor: [20, 50], popupAnchor: [0, -50]
-    });
-}
-
-
-// --- INICIALIZAÇÃO E LOGICA DO MAPA ---
-document.addEventListener("DOMContentLoaded", function() {
-    // Inicializa Mapa
-    map = L.map('map', { zoomControl: false }).setView([-14.2, -51.9], 4);
     L.control.zoom({ position: 'topright' }).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(map);
+    routeLayerGroup = L.layerGroup().addTo(map);
+}
 
-    // Marcadores Origem/Destino (Usa variáveis globais 'origem' e 'destino')
-    if (origem.lat) L.marker([origem.lat, origem.lon], { icon: criarIcone('origem') }).addTo(map).bindPopup(GetPopupLocal('Origem', GLOBAL_ORIGEM_NOME, GLOBAL_ORIGEM_UF));
-    if (destino.lat) L.marker([destino.lat, destino.lon], { icon: criarIcone('destino') }).addTo(map).bindPopup(GetPopupLocal('Destino', GLOBAL_DESTINO_NOME, GLOBAL_DESTINO_UF));
+// --- 2. Lógica de Seleção de Estratégia ---
+window.SelecionarEstrategia = function(tipo) {
+    currentState.estrategia = tipo;
 
-    // Traçar Rotas
-    if (rotas && rotas.length > 0) {
-        const layers = L.featureGroup();
-        let pontosAnimacao = [];
-        let pontoAtual = [origem.lat, origem.lon];
+    // UI: Atualiza Abas
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById(`tab-${tipo}`);
+    if(btn) btn.classList.add('active');
 
-        pontosAnimacao.push({ loc: pontoAtual, duracao: 0, tipo: 'inicio' });
+    // Dados
+    const rotas = window.opcoesRotas[tipo];
+    currentState.rotaSelecionada = rotas;
 
-        rotas.forEach((voo, i) => {
-            const pO = [voo.origem.lat, voo.origem.lon], pD = [voo.destino.lat, voo.destino.lon];
-            let cor = '#333';
-            if (voo.cia.includes('AZUL') || voo.cia.includes('AD')) cor = '#0055a4';
-            else if (voo.cia.includes('LATAM') || voo.cia.includes('LA')) cor = '#e60000';
-            else if (voo.cia.includes('GOL') || voo.cia.includes('G3')) cor = '#ff6600';
-
-            // Rodoviário até o Aeroporto
-            if (i === 0) {
-                L.polyline([pontoAtual, pO], { color: '#999', dashArray: '8,12', weight: 3 }).addTo(layers);
-                pontosAnimacao.push({ loc: pO, duracao: 3000, tipo: 'road' });
-            }
-
-            // Trecho Aéreo
-            L.polyline([pO, pD], { color: cor, weight: 4 }).addTo(layers);
-            L.circleMarker(pO, { radius: 5, color: cor, fillColor: '#fff', fillOpacity: 1 }).addTo(layers).bindPopup(GetPopupAero(voo.origem.iata, voo.origem.nome));
-            L.circleMarker(pD, { radius: 5, color: cor, fillColor: '#fff', fillOpacity: 1 }).addTo(layers).bindPopup(GetPopupAero(voo.destino.iata, voo.destino.nome));
-
-            pontosAnimacao.push({ loc: pD, duracao: 8000, tipo: 'air', cor: cor, flightIndex: i });
-            pontoAtual = pD;
-        });
-
-        // Rodoviário até o Cliente
-        const pFinal = [destino.lat, destino.lon];
-        L.polyline([pontoAtual, pFinal], { color: '#999', dashArray: '8,12', weight: 3 }).addTo(layers);
-        pontosAnimacao.push({ loc: pFinal, duracao: 3000, tipo: 'road' });
-
-        layers.addTo(map);
-        setTimeout(() => map.fitBounds(layers.getBounds(), { paddingTopLeft: [450, 50], paddingBottomRight: [50, 50] }), 500);
-
-        window.dadosAnimacao = pontosAnimacao;
-        window.iconTruck = criarIcone('truck');
-        window.iconPlane = criarIcone('plane');
-        setTimeout(IniciarLoop, 1500);
-    }
+    // Renderização
+    RenderizarRotaNoMapa(rotas);
+    RenderizarTimeline(rotas);
+    AtualizarMetricas(rotas);
     
-    // Auto-select primeiro voo
-    const primeiroCard = document.getElementById('card-flight-0');
-    if (primeiroCard) {
-        primeiroCard.click();
+    // Controle do Botão
+    const btnSalvar = document.getElementById('btn-confirmar');
+    if(!rotas || rotas.length === 0) {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = '<i class="ph-bold ph-warning"></i> Sem Rota Disponível';
+    } else {
+        btnSalvar.disabled = false;
+        btnSalvar.innerHTML = '<i class="ph-bold ph-check-circle"></i> Confirmar Rota';
     }
-});
+};
 
+// --- 3. Renderização Visual ---
 
-// --- FUNÇÕES DE ANIMAÇÃO ---
-function IniciarLoop() {
-    if (!window.dadosAnimacao) return;
-    const pontos = window.dadosAnimacao;
-    let index = 0;
+function RenderizarRotaNoMapa(listaTrechos) {
+    routeLayerGroup.clearLayers();
+    if (!listaTrechos || listaTrechos.length === 0) return;
 
-    ResetarIcones();
+    const latlngs = [];
 
-    if (markerAnim) markerAnim.remove();
+    listaTrechos.forEach((trecho, index) => {
+        const origem = [trecho.origem.lat, trecho.origem.lon];
+        const destino = [trecho.destino.lat, trecho.destino.lon];
 
-    markerAnim = L.Marker.movingMarker([pontos[0].loc], [1000], { icon: window.iconTruck, zIndexOffset: 2000 }).addTo(map);
-    markerAnim.bindPopup(GetPopupCtc());
-
-    function AnimarProximo() {
-        if (index >= pontos.length - 1) {
-            setTimeout(() => { AtualizarUI('coleta', 0); IniciarLoop(); }, 4000);
-            return;
-        }
-        const pProx = pontos[index + 1];
-
-        if (pProx.tipo === 'air') {
-            markerAnim.setIcon(window.iconPlane);
-            AtualizarUI('aereo', 50);
-            SincronizarAviaoSidebar(pProx.duracao, pProx.flightIndex);
-            HighlightCardVoo(pProx.flightIndex);
-        } else {
-            markerAnim.setIcon(window.iconTruck);
-            RemoverHighlightVoo();
-            if (index === 0) AtualizarUI('coleta', 10);
-            else AtualizarUI('entrega', 100);
+        // Marcador Origem
+        if (index === 0) {
+            L.circleMarker(origem, { color: '#10b981', radius: 8, fillOpacity: 1, fillColor: '#fff', weight: 3 }).addTo(routeLayerGroup)
+                .bindPopup(`<b>Origem:</b> ${trecho.origem.nome}`);
+            latlngs.push(origem);
         }
 
-        markerAnim.moveTo(pProx.loc, pProx.duracao);
-        markerAnim.once('end', function() {
-            setTimeout(() => { index++; AnimarProximo(); }, 500);
-        });
-    }
-    AnimarProximo();
-}
-
-function SincronizarAviaoSidebar(duracaoTotal, flightIndex) {
-    const icon = document.getElementById('plane-icon-' + flightIndex);
-    if (!icon) return;
-    let startTime = null;
-
-    function step(timestamp) {
-        if (!startTime) startTime = timestamp;
-        const progress = timestamp - startTime;
-        const percent = Math.min(progress / duracaoTotal, 1);
-        icon.style.left = (percent * 100) + '%';
-        if (progress < duracaoTotal) { window.requestAnimationFrame(step); }
-    }
-    window.requestAnimationFrame(step);
-}
-
-function ResetarIcones() {
-    document.querySelectorAll('.flight-icon-controlled').forEach(el => { el.style.left = '0%'; });
-    RemoverHighlightVoo();
-}
-
-function HighlightCardVoo(idx) {
-    RemoverHighlightVoo();
-    const card = document.getElementById('card-flight-' + idx);
-    if (card) {
-        card.classList.add('active-flight');
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-}
-
-function RemoverHighlightVoo() {
-    document.querySelectorAll('.flight-segment').forEach(c => c.classList.remove('active-flight'));
-}
-
-function AtualizarUI(stepId, progresso) {
-    document.querySelectorAll('.step-item').forEach(s => s.classList.remove('active'));
-    const el = document.getElementById('step-' + stepId);
-    if (el) { el.classList.add('active'); }
-    const line = document.getElementById('progress-line');
-    if (line) line.style.height = progresso + '%';
-}
-
-
-// --- INTERAÇÃO E SALVAMENTO ---
-function toggleListaConsolidada() {
-    var el = document.getElementById('lista-docs-consolidacao');
-    el.style.display = (el.style.display === 'none') ? 'block' : 'none';
-}
-
-function SelecionarVoo(index, dadosVoo) {
-    document.querySelectorAll('.flight-segment').forEach(el => {
-        el.classList.remove('selected-flight');
+        // Marcador Destino
+        L.circleMarker(destino, { color: '#004aad', radius: 8, fillOpacity: 1, fillColor: '#fff', weight: 3 }).addTo(routeLayerGroup)
+            .bindPopup(`<b>Destino:</b> ${trecho.destino.nome}`);
+        
+        latlngs.push(destino);
     });
 
-    const card = document.getElementById('card-flight-' + index);
-    if (card) card.classList.add('selected-flight');
+    // Linha da Rota
+    const polyline = L.polyline(latlngs, {
+        color: '#004aad', 
+        weight: 4,
+        opacity: 0.8,
+        dashArray: '10, 10', 
+        lineCap: 'round'
+    }).addTo(routeLayerGroup);
 
-    function toIso(dataStr, horaStr) {
-        if (!dataStr || !horaStr) return null;
-        const parts = dataStr.split('/');
-        return `${parts[2]}-${parts[1]}-${parts[0]}T${horaStr}:00`;
-    }
-
-    vooSelecionado = {
-        cia: dadosVoo.cia,
-        numero: dadosVoo.voo,
-        partida: toIso(dadosVoo.data, dadosVoo.horario_saida),
-        chegada: toIso(dadosVoo.data, dadosVoo.horario_chegada)
-    };
-    console.log("Voo Selecionado:", vooSelecionado);
+    // Ajusta Zoom com padding para não ficar embaixo da sidebar
+    map.fitBounds(polyline.getBounds(), { 
+        paddingTopLeft: [450, 50],  // Compensa a sidebar
+        paddingBottomRight: [50, 50]
+    });
 }
 
-function ConfirmarPlanejamento() {
-    if (!rotas || rotas.length === 0) {
-        alert("Não há rota aérea definida para gravar.");
+function RenderizarTimeline(listaTrechos) {
+    const container = document.getElementById('timeline-content');
+    container.innerHTML = '';
+
+    if (!listaTrechos || listaTrechos.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--cor-texto-secundario); opacity: 0.7;">
+                <i class="ph-duotone ph-airplane-slash" style="font-size: 3rem; margin-bottom: 10px;"></i>
+                <p>Nenhuma rota encontrada para esta estratégia.</p>
+            </div>
+        `;
         return;
     }
 
-    const trechosFormatados = rotas.map(voo => {
-        let dtParts = voo.data.split('/');
-        let dataIsoBase = `${dtParts[2]}-${dtParts[1]}-${dtParts[0]}`;
-        return {
-            cia: voo.cia,
-            voo: voo.voo,
-            origem: voo.origem.iata,
-            destino: voo.destino.iata,
-            partida_iso: `${dataIsoBase}T${voo.horario_saida}:00`,
-            chegada_iso: `${dataIsoBase}T${voo.horario_chegada}:00`
-        };
+    let html = '';
+    listaTrechos.forEach((trecho, idx) => {
+        // Conexão
+        if (idx > 0) {
+            html += `
+                <div class="connection-line">
+                    <i class="ph-bold ph-clock-clockwise"></i> Troca de aeronave em ${trecho.origem.iata}
+                </div>
+            `;
+        }
+
+        // Card de Voo
+        html += `
+            <div class="flight-card" style="animation-delay: ${idx * 0.1}s">
+                <div class="flight-header">
+                    <div class="cia-logo-box">
+                         <img src="/Luft-ConnectAir/Static/Img/Logos/${trecho.cia}.png" class="cia-logo" onerror="this.src='https://placehold.co/40x40?text=${trecho.cia}'">
+                    </div>
+                    <span class="cia-name">${trecho.cia} ${trecho.voo}</span>
+                    <span class="flight-date">${trecho.data}</span>
+                </div>
+                
+                <div class="flight-route">
+                    <div class="airport-block">
+                        <div class="airport-code">${trecho.origem.iata}</div>
+                        <div class="flight-time">${trecho.horario_saida}</div>
+                    </div>
+                    
+                    <div class="flight-arrow-anim">
+                        <i class="ph-bold ph-airplane-tilt"></i>
+                    </div>
+                    
+                    <div class="airport-block">
+                        <div class="airport-code">${trecho.destino.iata}</div>
+                        <div class="flight-time">${trecho.horario_chegada}</div>
+                    </div>
+                </div>
+            </div>
+        `;
     });
 
-    const payload = {
-        filial: ctc.filial,
-        serie: ctc.serie,
-        ctc: ctc.ctc,
-        rota_completa: trechosFormatados
-    };
+    container.innerHTML = html;
+}
 
-    const btn = event.target.closest('button'); // Ajuste para garantir que pegue o button mesmo clicando no ícone
+function AtualizarMetricas(listaTrechos) {
+    const container = document.getElementById('strategy-metrics');
+    
+    if(!listaTrechos || listaTrechos.length === 0) {
+        container.style.opacity = '0.5';
+        return;
+    }
+    
+    const info = listaTrechos[0]; // Dados agregados vêm no primeiro item
+    const els = container.children;
+    
+    // Animação simples de atualização de números
+    els[0].querySelector('.val').innerText = info.total_custo || 'R$ --';
+    els[1].querySelector('.val').innerText = info.total_duracao || '--:--';
+    els[2].querySelector('.val').innerText = (listaTrechos.length - 1) + (listaTrechos.length > 1 ? ' escalas' : ' escala');
+    
+    container.style.opacity = '1';
+}
+
+// --- 4. Submissão ---
+window.ConfirmarPlanejamento = function() {
+    if (!currentState.rotaSelecionada) return;
+
+    const btn = document.getElementById('btn-confirmar');
     const originalText = btn.innerHTML;
     
-    btn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Gravando...';
     btn.disabled = true;
+    btn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Processando...';
+
+    // Prepara Payload
+    const rotaFormatada = currentState.rotaSelecionada.map(trecho => ({
+        cia: trecho.cia,
+        voo: trecho.voo,
+        origem: trecho.origem.iata,
+        destino: trecho.destino.iata,
+        partida_iso: InverterData(trecho.data) + 'T' + trecho.horario_saida + ':00',
+        chegada_iso: InverterData(trecho.data) + 'T' + trecho.horario_chegada + ':00'
+    }));
+
+    const payload = {
+        filial: window.ctc.filial,
+        serie: window.ctc.serie,
+        ctc: window.ctc.ctc,
+        rota_completa: rotaFormatada,
+        estrategia: currentState.estrategia
+    };
 
     fetch(URL_GRAVAR_PLANEJAMENTO, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        })
-        .then(r => r.json())
-        .then(d => {
-            if (d.sucesso) {
-                btn.innerHTML = '<i class="ph-bold ph-check"></i> Salvo!';
-                btn.style.background = '#10b981';
-                setTimeout(() => alert('Planejamento Salvo! ID: ' + d.id_planejamento), 500);
-            } else {
-                alert('Erro: ' + d.msg);
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            alert("Erro de comunicação.");
-            btn.disabled = false;
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if(data.sucesso) {
+            btn.innerHTML = '<i class="ph-bold ph-check"></i> Sucesso!';
+            btn.style.background = '#10b981'; // Verde Sucesso
+            btn.style.animation = 'none';
+            setTimeout(() => {
+                window.location.href = '/Luft-ConnectAir/Planejamento/Dashboard';
+            }, 1000);
+        } else {
+            alert('Erro ao salvar: ' + (data.msg || 'Erro desconhecido'));
             btn.innerHTML = originalText;
-        });
+            btn.disabled = false;
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Erro de comunicação com o servidor.');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+};
+
+function InverterData(strData) {
+    if(!strData) return '';
+    const parts = strData.split('/');
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
 }
+
+// --- 5. Controle do Modal de Lote ---
+
+window.AbrirModalLote = function() {
+    const backdrop = document.getElementById('modal-lote-backdrop');
+    if(backdrop) {
+        backdrop.classList.remove('hidden');
+        // Pequeno timeout para permitir que a transição CSS funcione
+        setTimeout(() => backdrop.classList.add('visible'), 10);
+    }
+};
+
+window.FecharModalLote = function(event) {
+    // Se passar evento (clique no backdrop), verifica se clicou fora
+    if (event && !event.target.classList.contains('modal-backdrop')) return;
+
+    const backdrop = document.getElementById('modal-lote-backdrop');
+    if(backdrop) {
+        backdrop.classList.remove('visible');
+        setTimeout(() => backdrop.classList.add('hidden'), 300); // Espera animação acabar
+    }
+};
+
+// Atalho de teclado para fechar (ESC)
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') window.FecharModalLote(null);
+});

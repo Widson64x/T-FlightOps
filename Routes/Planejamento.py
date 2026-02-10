@@ -60,11 +60,7 @@ def MontarPlanejamento(filial, serie, ctc):
     CoordOrigem = BuscarCoordenadasCidade(DadosCtc['origem_cidade'], DadosCtc['origem_uf'])
     CoordDestino = BuscarCoordenadasCidade(DadosCtc['destino_cidade'], DadosCtc['destino_uf'])
     
-    if not CoordOrigem or not CoordDestino:
-        LogService.Warning("Routes.Planejamento", f"Falha de Geolocalização para {DadosCtc['origem_cidade']} ou {DadosCtc['destino_cidade']}")
-        return render_template('Planejamento/Editor.html', Erro="Erro Geo", Ctc=DadosCtc)
-
-    # 3. Consolidação
+    # 3. Consolidação (Agora suporta TM via SQL atualizado no Service)
     CtcsCandidatos = PlanejamentoService.BuscarCtcsConsolidaveis(
         DadosCtc['origem_cidade'], 
         DadosCtc['origem_uf'],
@@ -76,29 +72,33 @@ def MontarPlanejamento(filial, serie, ctc):
         DadosCtc['tipo_carga']
     )
     
-    # Unifica (Apenas memória, NÃO GRAVA AINDA)
+    # Unifica
     DadosUnificados = PlanejamentoService.UnificarConsolidacao(DadosCtc, CtcsCandidatos)
 
     # 4. Aeroportos
-    AeroOrigem = BuscarAeroportoMaisProximo(CoordOrigem['lat'], CoordOrigem['lon'])
-    AeroDestino = BuscarAeroportoMaisProximo(CoordDestino['lat'], CoordDestino['lon'])
+    AeroOrigem = BuscarAeroportoMaisProximo(CoordOrigem['lat'], CoordOrigem['lon']) if CoordOrigem else None
+    AeroDestino = BuscarAeroportoMaisProximo(CoordDestino['lat'], CoordDestino['lon']) if CoordDestino else None
 
-    # 5. Busca de Rotas
-    RotasSugeridas = []
+    # 5. Busca de Rotas Inteligentes (Categorizadas)
+    OpcoesRotas = {}
     if AeroOrigem and AeroDestino:
         DataInicioBusca = DadosUnificados['data_busca'] 
-        for Dias in [3, 10, 30]:
-            DataLimite = DataInicioBusca + timedelta(days=Dias)
-            RotasSugeridas = MalhaService.BuscarRotasInteligentes(
-                DataInicioBusca, DataLimite, AeroOrigem['iata'], AeroDestino['iata']
-            )
-            if RotasSugeridas: break
+        
+        # Passamos o peso unificado para cálculo de custo
+        PesoTotal = float(DadosUnificados.get('peso', 10.0))
+        
+        # Busca com janela de 5 dias para ter mais opções
+        DataLimite = DataInicioBusca + timedelta(days=5) 
+        
+        OpcoesRotas = MalhaService.BuscarOpcoesDeRotas(
+            DataInicioBusca, DataLimite, AeroOrigem['iata'], AeroDestino['iata'], PesoTotal
+        )
 
     return render_template('Planejamento/Editor.html', 
                            Ctc=DadosUnificados, 
                            Origem=CoordOrigem, Destino=CoordDestino,
                            AeroOrigem=AeroOrigem, AeroDestino=AeroDestino,
-                           Rotas=RotasSugeridas)
+                           OpcoesRotas=OpcoesRotas) # Passa o dicionário completo de opções
 
 @PlanejamentoBp.route('/API/Salvar', methods=['POST'])
 @login_required

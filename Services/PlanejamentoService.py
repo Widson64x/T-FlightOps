@@ -4,6 +4,10 @@ from sqlalchemy import desc, func, text
 from Conexoes import ObterSessaoSqlServer, ObterSessaoSqlServer
 from Models.SQL_SERVER.Ctc import CtcEsp, CtcEspCpl
 from Models.SQL_SERVER.Planejamento import PlanejamentoCabecalho, PlanejamentoItem, PlanejamentoTrecho
+from Models.SQL_SERVER.TabelaFrete import TabelaFrete, RemessaFrete
+from Models.SQL_SERVER.Aeroporto import Aeroporto, RemessaAeroportos
+from Models.SQL_SERVER.Cidade import Cidade, RemessaCidade
+from Models.SQL_SERVER.MalhaAerea import VooMalha , RemessaMalha
 from Services.LogService import LogService 
 
 class PlanejamentoService:
@@ -132,7 +136,7 @@ class PlanejamentoService:
             info = MapaCache.get(chave)
             
             
-            print(f"Cabeçalho Row: {row} | Chave: {chave} | Info Cache: {info}")  # Log de debug para verificar a chave e o cache
+            #print(f"Cabeçalho Row: {row} | Chave: {chave} | Info Cache: {info}")  # Log de debug para verificar a chave e o cache
             Lista.append({
                 'id_unico': f"{to_str(row.Filial)}-{to_str(row.CTC)}",
                 'origem_dados': NomeBloco,  # <--- IMPORTANTE: DIARIO, REVERSA ou BACKLOG
@@ -357,12 +361,13 @@ class PlanejamentoService:
     @staticmethod
     def BuscarCtcsConsolidaveis(cidade_origem, uf_origem, cidade_destino, uf_destino, data_base, filial_excluir=None, ctc_excluir=None, tipo_carga=None):
         """
-        Busca todos os CTCs aéreos do mesmo dia, mesma rota e MESMO TIPO DE CARGA.
+        Busca CTCs do mesmo dia/rota/tipo.
+        CORREÇÃO: Agora retorna 'origem_uf' e 'destino_uf' para evitar erro no salvamento.
         """
         Sessao = ObterSessaoSqlServer()
         try:
-            # Logs substituindo prints
-            LogService.Debug("PlanejamentoService", f"Iniciando busca consolidação. Rota: {cidade_origem}/{uf_origem} -> {cidade_destino}/{uf_destino}, TipoCarga: {tipo_carga}")
+            # ... (Mantenha a lógica de filtros e query existente até o loop for) ...
+            LogService.Debug("PlanejamentoService", f"Busca consolidação (Inc. TM). Rota: {cidade_origem} -> {cidade_destino}")
 
             if isinstance(data_base, datetime): data_base = data_base.date()
             Inicio = datetime.combine(data_base, time.min)
@@ -372,38 +377,34 @@ class PlanejamentoService:
             uf_origem = str(uf_origem).strip().upper()
             cidade_destino = str(cidade_destino).strip().upper()
             uf_destino = str(uf_destino).strip().upper()
-            
-            # ALTERADO: Trazemos (CtcEsp, CtcEspCpl) para poder dar print no tipo
+
+            # Subquery TM
+            subquery_tm = text("SELECT 1 FROM intec.dbo.tb_ocorr O (NOLOCK) WHERE O.filialctc = C.filialctc AND O.cod_ocorr = 'TM'")
+
             Query = Sessao.query(CtcEsp, CtcEspCpl).outerjoin(
-                CtcEspCpl, 
-                CtcEsp.filialctc == CtcEspCpl.filialctc
+                CtcEspCpl, CtcEsp.filialctc == CtcEspCpl.filialctc
             ).filter(
                 CtcEsp.data >= Inicio, CtcEsp.data <= Fim,
-                CtcEsp.tipodoc != 'COB', CtcEsp.modal.like('AEREO%'),
+                CtcEsp.tipodoc != 'COB',
                 func.upper(func.trim(CtcEsp.cidade_orig)) == cidade_origem,
                 func.upper(func.trim(CtcEsp.uf_orig)) == uf_origem,
                 func.upper(func.trim(CtcEsp.cidade_dest)) == cidade_destino,
                 func.upper(func.trim(CtcEsp.uf_dest)) == uf_destino
             )
             
-            # Filtro do Tipo de Carga
-            if tipo_carga:
-                Query = Query.filter(CtcEspCpl.TipoCarga == str(tipo_carga).strip())
+            # Filtros de Modal/TM
+            Query = Query.filter(
+                (CtcEsp.modal.like('AEREO%')) | (text("EXISTS (SELECT 1 FROM intec.dbo.tb_ocorr O WHERE O.filialctc = tb_ctc_esp.filialctc AND O.cod_ocorr = 'TM')"))
+            )
             
-            if filial_excluir and ctc_excluir:  
-                Query = Query.filter(~((CtcEsp.filial == str(filial_excluir).strip()) & (CtcEsp.filialctc == str(ctc_excluir).strip())))
+            if tipo_carga: Query = Query.filter(CtcEspCpl.TipoCarga == str(tipo_carga).strip())
+            if filial_excluir and ctc_excluir: Query = Query.filter(~((CtcEsp.filial == str(filial_excluir).strip()) & (CtcEsp.filialctc == str(ctc_excluir).strip())))
             
             Resultados = Query.order_by(desc(CtcEsp.data), desc(CtcEsp.hora)).all()
             
-            LogService.Info("PlanejamentoService", f"Encontrados {len(Resultados)} candidatos para consolidação na rota {cidade_origem}-{cidade_destino}.")
-
             ListaConsolidados = []
-            
             for c, cpl in Resultados:
                 tipo_candidato = cpl.TipoCarga if cpl else "N/A"
-                # Log Debug opcional
-                # LogService.Debug("PlanejamentoService", f"Candidato: {c.filialctc} | Tipo: {tipo_candidato}")
-
                 def to_float(val): return float(val) if val else 0.0
                 def to_int(val): return int(val) if val else 0
                 def to_str(val): return str(val).strip() if val else ''
@@ -411,8 +412,7 @@ class PlanejamentoService:
                 str_hora = "00:00"
                 if c.hora:
                     h_raw = str(c.hora).strip().replace(':', '').zfill(4)
-                    if len(h_raw) >= 4:
-                        str_hora = f"{h_raw[:2]}:{h_raw[2:]}"
+                    if len(h_raw) >= 4: str_hora = f"{h_raw[:2]}:{h_raw[2:]}"
 
                 ListaConsolidados.append({
                     'filial': to_str(c.filial),
@@ -425,11 +425,16 @@ class PlanejamentoService:
                     'destinatario': to_str(c.dest_nome),
                     'data_emissao': c.data,
                     'hora_emissao': str_hora,
+                    
+                    # --- CORREÇÃO AQUI: Incluindo as UFs ---
                     'origem_cidade': to_str(c.cidade_orig),
+                    'origem_uf': to_str(c.uf_orig),
                     'destino_cidade': to_str(c.cidade_dest),
+                    'destino_uf': to_str(c.uf_dest),
+                    
                     'tipo_carga': tipo_candidato
                 })
-            
+
             return ListaConsolidados
         except Exception as e:
             LogService.Error("PlanejamentoService", "Erro em BuscarCtcsConsolidaveis", e)
@@ -440,8 +445,8 @@ class PlanejamentoService:
     @staticmethod
     def UnificarConsolidacao(ctc_principal, lista_candidatos):
         """
-        Recebe o CTC Principal e a Lista de Candidatos.
-        Retorna um objeto 'Virtual' (Lote) somando volumes, pesos e valores.
+        Gera o Lote Virtual.
+        CORREÇÃO: Propaga as cidades e UFs para os itens filhos da lista 'lista_docs'.
         """
         try:
             if not lista_candidatos:
@@ -452,6 +457,7 @@ class PlanejamentoService:
 
             unificado = ctc_principal.copy()
             
+            # Garante que o item principal tenha os dados de local
             docs = [{
                 'filial': ctc_principal['filial'],
                 'serie': ctc_principal['serie'],
@@ -461,7 +467,13 @@ class PlanejamentoService:
                 'valor': float(ctc_principal['valor']),
                 'remetente': ctc_principal['remetente'],
                 'destinatario': ctc_principal['destinatario'],
-                'tipo_carga': ctc_principal['tipo_carga']
+                'tipo_carga': ctc_principal['tipo_carga'],
+                
+                # Dados de Local
+                'origem_cidade': ctc_principal.get('origem_cidade'),
+                'origem_uf': ctc_principal.get('origem_uf'),
+                'destino_cidade': ctc_principal.get('destino_cidade'),
+                'destino_uf': ctc_principal.get('destino_uf')
             }]
             
             total_volumes = docs[0]['volumes']
@@ -478,7 +490,13 @@ class PlanejamentoService:
                     'valor': float(c['val_mercadoria']),
                     'remetente': c['remetente'],
                     'destinatario': c['destinatario'],
-                    'tipo_carga': c['tipo_carga']
+                    'tipo_carga': c['tipo_carga'],
+                    
+                    # --- CORREÇÃO: Propagando Local para os filhos ---
+                    'origem_cidade': c.get('origem_cidade'),
+                    'origem_uf': c.get('origem_uf'),
+                    'destino_cidade': c.get('destino_cidade'),
+                    'destino_uf': c.get('destino_uf')
                 }
                 docs.append(c_doc)
                 total_volumes += c_doc['volumes']
@@ -494,17 +512,20 @@ class PlanejamentoService:
             unificado['qtd_docs'] = len(docs)
             unificado['resumo_consol'] = f"Lote com {len(docs)} CTCs"
 
-            LogService.Info("PlanejamentoService", f"Consolidação Unificada: {len(docs)} documentos, Total Peso: {total_peso}")
             return unificado
         except Exception as e:
             LogService.Error("PlanejamentoService", "Erro em UnificarConsolidacao", e)
-            return ctc_principal # Retorna o original para não quebrar tudo
+            return ctc_principal
     
     @staticmethod
     def RegistrarPlanejamento(dados_ctc_principal, lista_consolidados=None, usuario="Sistema", status_inicial='Em Planejamento', 
                               aero_origem=None, aero_destino=None, lista_trechos=None):
         """
-        Salva ou atualiza o Planejamento, Itens e TRECHOS DE VOO.
+        Salva o Planejamento.
+        ATUALIZAÇÃO:
+        1. Validação rigorosa de IDs (Cidade, Aeroporto, Voo, Frete).
+        2. Busca de Cidade insensível a acentos e com suporte a 'CIDADE-UF'.
+        3. IndConsolidado = 1 APENAS para o CTC Principal. Itens filhos recebem 0.
         """
         SessaoPG = ObterSessaoSqlServer()
         if not SessaoPG: 
@@ -514,11 +535,80 @@ class PlanejamentoService:
         try:
             LogService.Info("PlanejamentoService", f"Iniciando Gravação de Planejamento. Usuário: {usuario}")
 
+            # --- HELPER FUNCTIONS (Lookup) ---
+            def buscar_id_cidade(nome, uf):
+                if not nome: return None
+                nome_busca = str(nome).strip()
+                uf_busca = str(uf).strip()
+
+                # Tratamento para "ITAJAI-SC"
+                if '-' in nome_busca:
+                    partes = nome_busca.rsplit('-', 1)
+                    if len(partes) == 2 and len(partes[1].strip()) == 2:
+                        nome_busca = partes[0].strip()
+                        uf_busca = partes[1].strip()
+                
+                if not uf_busca: return None
+
+                try:
+                    res = SessaoPG.query(Cidade.Id).join(RemessaCidade, Cidade.IdRemessa == RemessaCidade.Id).filter(
+                        RemessaCidade.Ativo == True,
+                        func.upper(Cidade.Uf) == uf_busca.upper(),
+                        func.upper(Cidade.NomeCidade).collate('SQL_Latin1_General_CP1_CI_AI').like(f"%{nome_busca.upper()}%")
+                    ).first()
+                    return res.Id if res else None
+                except: return None
+
+            def buscar_id_aeroporto(iata):
+                if not iata: return None
+                try:
+                    res = SessaoPG.query(Aeroporto.Id).join(RemessaAeroportos, Aeroporto.IdRemessa == RemessaAeroportos.Id).filter(
+                        RemessaAeroportos.Ativo == True,
+                        Aeroporto.CodigoIata == str(iata).upper().strip()
+                    ).first()
+                    return res.Id if res else None
+                except: return None
+
+            def buscar_id_voo(cia, numero, data_partida, origem):
+                if not cia or not numero or not data_partida: return None
+                try:
+                    dt = data_partida.date() if isinstance(data_partida, datetime) else data_partida
+                    res = SessaoPG.query(VooMalha.Id).join(RemessaMalha, VooMalha.IdRemessa == RemessaMalha.Id).filter(
+                        RemessaMalha.Ativo == True,
+                        VooMalha.CiaAerea == str(cia).strip(),
+                        VooMalha.NumeroVoo == str(numero).strip(),
+                        VooMalha.DataPartida == dt,
+                        VooMalha.AeroportoOrigem == str(origem).strip()
+                    ).first()
+                    return res.Id if res else None
+                except: return None
+
+            def buscar_frete_info(origem, destino, cia):
+                if not origem or not destino or not cia: return (None, None)
+                try:
+                    res = SessaoPG.query(TabelaFrete).join(RemessaFrete, TabelaFrete.IdRemessa == RemessaFrete.Id).filter(
+                        RemessaFrete.Ativo == True,
+                        TabelaFrete.Origem == str(origem).upper().strip(),
+                        TabelaFrete.Destino == str(destino).upper().strip(),
+                        TabelaFrete.CiaAerea == str(cia).strip()
+                    ).first()
+                    return (res.Id, res.Servico) if res else (None, None)
+                except: return (None, None)
+
             def parse_dt(dt_str):
                 if not dt_str: return None
                 try: return datetime.fromisoformat(str(dt_str).replace('Z', ''))
                 except: return None
+            # --- FIM HELPERS ---
 
+            # 1. VALIDAÇÃO CABEÇALHO
+            id_aero_orig_cab = buscar_id_aeroporto(aero_origem)
+            id_aero_dest_cab = buscar_id_aeroporto(aero_destino)
+
+            if not id_aero_orig_cab: raise Exception(f"Aeroporto de Origem '{aero_origem}' inválido ou inativo.")
+            if not id_aero_dest_cab: raise Exception(f"Aeroporto de Destino '{aero_destino}' inválido ou inativo.")
+
+            # Verifica ou Cria Cabeçalho
             item_existente = SessaoPG.query(PlanejamentoItem).join(PlanejamentoCabecalho).filter(
                 PlanejamentoItem.Filial == str(dados_ctc_principal['filial']),
                 PlanejamentoItem.Serie == str(dados_ctc_principal['serie']),
@@ -527,25 +617,22 @@ class PlanejamentoService:
             ).first()
 
             Cabecalho = None
-
             if item_existente:
-                LogService.Info("PlanejamentoService", f"Atualizando Planejamento Existente ID: {item_existente.Cabecalho.IdPlanejamento}")
                 Cabecalho = item_existente.Cabecalho
-                if aero_origem: Cabecalho.AeroportoOrigem = aero_origem
-                if aero_destino: Cabecalho.AeroportoDestino = aero_destino
-                
-                # Limpa trechos antigos para regravar
+                Cabecalho.AeroportoOrigem = aero_origem
+                Cabecalho.IdAeroportoOrigem = id_aero_orig_cab
+                Cabecalho.AeroportoDestino = aero_destino
+                Cabecalho.IdAeroportoDestino = id_aero_dest_cab
                 SessaoPG.query(PlanejamentoTrecho).filter(PlanejamentoTrecho.IdPlanejamento == Cabecalho.IdPlanejamento).delete()
-            
             else:
-                LogService.Info("PlanejamentoService", "Criando novo registro de Planejamento Cabecalho/Itens.")
                 def get_val(key): return float(dados_ctc_principal.get(key, 0) or 0)
-                
                 Cabecalho = PlanejamentoCabecalho(
                     UsuarioCriacao=str(usuario),
                     Status=status_inicial,
                     AeroportoOrigem=aero_origem,
                     AeroportoDestino=aero_destino,
+                    IdAeroportoOrigem=id_aero_orig_cab,
+                    IdAeroportoDestino=id_aero_dest_cab,
                     TotalVolumes=int(get_val('volumes')),
                     TotalPeso=get_val('peso'),
                     TotalValor=get_val('valor')
@@ -553,57 +640,100 @@ class PlanejamentoService:
                 SessaoPG.add(Cabecalho)
                 SessaoPG.flush()
 
-                # Adiciona CTC Principal
-                if dados_ctc_principal.get('is_consolidado'): info = dados_ctc_principal['lista_docs'][0]
-                else: info = dados_ctc_principal
+                # --- PREPARAÇÃO DA LISTA DE DOCUMENTOS (REGRA INDCONSOLIDADO) ---
+                todos_docs = []
                 
-                ItemPrincipal = PlanejamentoItem(
-                    IdPlanejamento=Cabecalho.IdPlanejamento,
-                    Filial=str(dados_ctc_principal['filial']),
-                    Serie=str(dados_ctc_principal['serie']),
-                    Ctc=str(dados_ctc_principal['ctc']),
-                    DataEmissao=dados_ctc_principal.get('data_emissao_real'),
-                    Hora=dados_ctc_principal.get('hora_formatada'), 
-                    Remetente=str(dados_ctc_principal.get('remetente',''))[:100],
-                    Destinatario=str(dados_ctc_principal.get('destinatario',''))[:100],
-                    OrigemCidade=str(dados_ctc_principal.get('origem_cidade',''))[:50],
-                    DestinoCidade=str(dados_ctc_principal.get('destino_cidade',''))[:50],
-                    Volumes=int(info.get('volumes', 0)),
-                    PesoTaxado=float(info.get('peso', 0) or info.get('peso_taxado', 0)),
-                    ValMercadoria=float(info.get('valor', 0) or info.get('val_mercadoria', 0)),
-                    IndConsolidado=False
-                )
-                SessaoPG.add(ItemPrincipal)
+                # 1. CTC PRINCIPAL (Mãe/Pai) -> Recebe IndConsolidado = True (se houver consolidação)
+                # Se não tiver filhos, ele entra como False (item normal), ou True se veio marcado.
+                # Como a regra é "só o principal é 1", garantimos isso aqui:
+                eh_consolidado_principal = dados_ctc_principal.get('is_consolidado', False)
+                dados_ctc_principal['IndConsolidado'] = eh_consolidado_principal
+                todos_docs.append(dados_ctc_principal)
 
-                # Adiciona Consolidados
+                # 2. CTCs FILHOS (Anexados) -> Recebem IndConsolidado = False (0)
                 if lista_consolidados:
                     for c in lista_consolidados:
-                        SessaoPG.add(PlanejamentoItem(
-                            IdPlanejamento=Cabecalho.IdPlanejamento,
-                            Filial=str(c['filial']), Serie=str(c['serie']), Ctc=str(c['ctc']),
-                            Volumes=int(c.get('volumes',0)), PesoTaxado=float(c.get('peso_taxado',0)),
-                            ValMercadoria=float(c.get('val_mercadoria',0)),
-                            Remetente=str(c.get('remetente',''))[:100], Destinatario=str(c.get('destinatario',''))[:100],
-                            DataEmissao=c.get('data_emissao'),
-                            Hora=c.get('hora_emissao'), 
-                            OrigemCidade=str(c.get('origem_cidade', ''))[:50],
-                            DestinoCidade=str(c.get('destino_cidade', ''))[:50],
-                            IndConsolidado=True
-                        ))
+                        c['IndConsolidado'] = False  # <--- CORREÇÃO AQUI: Força 0 para os filhos
+                        todos_docs.append(c)
+                
+                # Salva os Itens
+                for doc in todos_docs:
+                    cidade_orig = str(doc.get('origem_cidade', ''))
+                    uf_orig = str(doc.get('origem_uf') or doc.get('uf_orig', ''))
+                    cidade_dest = str(doc.get('destino_cidade', ''))
+                    uf_dest = str(doc.get('destino_uf') or doc.get('uf_dest', ''))
+                    
+                    data_emissao = doc.get('data_emissao_real') or doc.get('data_emissao')
+                    hora_emissao = doc.get('hora_formatada') or doc.get('hora_emissao')
 
-            # 3. GRAVA OS TRECHOS
+                    id_cid_orig = buscar_id_cidade(cidade_orig, uf_orig)
+                    id_cid_dest = buscar_id_cidade(cidade_dest, uf_dest)
+
+                    if not id_cid_orig: raise Exception(f"Cidade Origem '{cidade_orig}-{uf_orig}' não encontrada/inativa para CTC {doc.get('ctc')}")
+                    if not id_cid_dest: raise Exception(f"Cidade Destino '{cidade_dest}-{uf_dest}' não encontrada/inativa para CTC {doc.get('ctc')}")
+
+                    SessaoPG.add(PlanejamentoItem(
+                        IdPlanejamento=Cabecalho.IdPlanejamento,
+                        Filial=str(doc['filial']),
+                        Serie=str(doc['serie']),
+                        Ctc=str(doc['ctc']),
+                        DataEmissao=data_emissao,
+                        Hora=hora_emissao,
+                        Remetente=str(doc.get('remetente',''))[:100],
+                        Destinatario=str(doc.get('destinatario',''))[:100],
+                        OrigemCidade=cidade_orig[:50],
+                        DestinoCidade=cidade_dest[:50],
+                        IdCidadeOrigem=id_cid_orig,
+                        IdCidadeDestino=id_cid_dest,
+                        Volumes=int(doc.get('volumes', 0)),
+                        PesoTaxado=float(doc.get('peso', 0) or doc.get('peso_taxado', 0)),
+                        ValMercadoria=float(doc.get('valor', 0) or doc.get('val_mercadoria', 0)),
+                        IndConsolidado=doc.get('IndConsolidado', False) # Agora está correto (Pai=1, Filho=0)
+                    ))
+
+            # 2. GRAVA OS TRECHOS
             if lista_trechos and len(lista_trechos) > 0:
-                LogService.Debug("PlanejamentoService", f"Gravando {len(lista_trechos)} trechos de voo.")
                 for idx, trecho in enumerate(lista_trechos):
+                    
+                    origem_iata = trecho.get('origem', {}).get('iata') if isinstance(trecho.get('origem'), dict) else trecho.get('origem')
+                    destino_iata = trecho.get('destino', {}).get('iata') if isinstance(trecho.get('destino'), dict) else trecho.get('destino')
+                    cia = trecho.get('cia')
+                    dt_partida = parse_dt(trecho.get('partida_iso'))
+                    dt_chegada = parse_dt(trecho.get('chegada_iso'))
+
+                    id_aero_orig = buscar_id_aeroporto(origem_iata)
+                    id_aero_dest = buscar_id_aeroporto(destino_iata)
+                    id_voo = buscar_id_voo(cia, trecho.get('voo'), dt_partida, origem_iata)
+                    id_frete, tipo_servico_frete = buscar_frete_info(origem_iata, destino_iata, cia)
+
+                    if not id_aero_orig: raise Exception(f"Trecho {idx+1}: Aeroporto Origem '{origem_iata}' inválido.")
+                    if not id_aero_dest: raise Exception(f"Trecho {idx+1}: Aeroporto Destino '{destino_iata}' inválido.")
+                    if not id_voo: raise Exception(f"Trecho {idx+1}: Voo {cia} {trecho.get('voo')} não encontrado na malha ativa.")
+                    if not id_frete: raise Exception(f"Trecho {idx+1}: Tabela de Frete não encontrada para {cia} ({origem_iata}->{destino_iata}).")
+
+                    tipo_servico = trecho.get('tipo_servico', tipo_servico_frete)
+                    horario_corte = None
+                    if trecho.get('horario_corte'):
+                        try: horario_corte = datetime.strptime(trecho.get('horario_corte'), '%H:%M').time()
+                        except: pass
+                    data_corte = parse_dt(trecho.get('data_corte'))
+
                     NovoTrecho = PlanejamentoTrecho(
                         IdPlanejamento=Cabecalho.IdPlanejamento,
                         Ordem=idx + 1,
-                        CiaAerea=trecho.get('cia'),
+                        CiaAerea=cia,
                         NumeroVoo=trecho.get('voo'),
-                        AeroportoOrigem=trecho.get('origem', {}).get('iata') if isinstance(trecho.get('origem'), dict) else trecho.get('origem'),
-                        AeroportoDestino=trecho.get('destino', {}).get('iata') if isinstance(trecho.get('destino'), dict) else trecho.get('destino'),
-                        DataPartida=parse_dt(trecho.get('partida_iso')),
-                        DataChegada=parse_dt(trecho.get('chegada_iso'))
+                        AeroportoOrigem=origem_iata,
+                        AeroportoDestino=destino_iata,
+                        IdAeroportoOrigem=id_aero_orig,
+                        IdAeroportoDestino=id_aero_dest,
+                        IdVoo=id_voo,
+                        IdFrete=id_frete,
+                        TipoServico=tipo_servico,
+                        HorarioCorte=horario_corte,
+                        DataCorte=data_corte,
+                        DataPartida=dt_partida,
+                        DataChegada=dt_chegada
                     )
                     SessaoPG.add(NovoTrecho)
 
@@ -613,7 +743,7 @@ class PlanejamentoService:
 
         except Exception as e:
             SessaoPG.rollback()
-            LogService.Error("PlanejamentoService", "Erro crítico ao gravar planejamento", e)
-            return None
+            LogService.Error("PlanejamentoService", f"Erro crítico (Validação/Gravação): {str(e)}", e)
+            raise e 
         finally:
             SessaoPG.close()
