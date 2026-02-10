@@ -1,216 +1,136 @@
 {% extends "Base.html" %}
 
-{% block titulo %}Planejamento Visual | Luft-ConnectAir{% endblock %}
+{% block titulo %}Cockpit de Planejamento | Luft-ConnectAir{% endblock %}
 
 {% block conteudo %}
 {% include "Components/_ModalCtc.html" %}
-<link rel="stylesheet" href="{{ url_for('static', filename='CSS/Planejamento/Editor.css') }}">
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='CSS/Planejamento/Editor.css') }}">
 
 <div class="map-wrapper">
-    <div class="glass-sidebar">
-        <div class="slide-header">
-            <div class="header-top-bar">
-                <button class="btn-action-primary" onclick="ConfirmarPlanejamento()">
-                    <i class="ph-bold ph-floppy-disk"></i>
-                    <span>Realizar Planejamento</span>
-                </button>
+    <div id="map"></div>
 
-                <div class="right-actions">
-                    <div class="badge-serie {{ 'is-lote' if Ctc.is_consolidado else '' }}" 
-                         title="{{ 'Lote Consolidado' if Ctc.is_consolidado else 'Documento Individual' }}">
-                        {% if Ctc.is_consolidado %}
-                            <i class="ph-bold ph-stack"></i> 
-                            <span>{{ Ctc.qtd_docs }}</span>
-                        {% else %}
-                            <i class="ph-bold ph-barcode"></i> 
-                            <span>{{ Ctc.filial }} / {{ Ctc.serie }}</span>
-                        {% endif %}
-                    </div>
+    <div class="glass-sidebar">
+        
+        <div class="sidebar-header-editor">
+            <div class="header-top">
+                <div class="badge-serie {{ 'is-lote' if Ctc.is_consolidado else '' }}" 
+                     onclick="{% if Ctc.is_consolidado %}AbrirModalLote(){% endif %}"
+                     style="{{ 'cursor: pointer;' if Ctc.is_consolidado else '' }}"
+                     title="{{ 'Clique para ver os documentos' if Ctc.is_consolidado else '' }}">
                     
                     {% if Ctc.is_consolidado %}
-                    <button class="btn-toggle-mini" onclick="toggleListaConsolidada()" title="Ver Detalhes do Lote">
-                        <i class="ph-bold ph-caret-down"></i>
-                    </button>
+                        <i class="ph-bold ph-stack"></i> Lote: {{ Ctc.qtd_docs }} docs <i class="ph-bold ph-caret-down" style="margin-left: 5px; font-size: 0.8em;"></i>
+                    {% else %}
+                        <i class="ph-bold ph-file-text"></i> CTC Individual
                     {% endif %}
                 </div>
-            </div>
 
-            <div class="ctc-info-block">
-                {% if Ctc.is_consolidado %}
-                    <h1 class="ctc-title" style="font-size: 1.8rem;">Lote de Embarque</h1>
-                    <div class="ctc-meta">
-                        <div><i class="ph-fill ph-ticket"></i> Ref: {{ Ctc.ctc }} (Principal)</div>
-                    </div>
-                {% else %}
-                    <h1 class="ctc-title">CTC {{ Ctc.ctc }}</h1>
-                {% endif %}
-
-                <div class="ctc-meta">
-                    <div><i class="ph-fill ph-calendar-blank"></i> {{ Ctc.data_emissao_real.strftime('%d/%m/%Y') }}</div>
-                    <div><i class="ph-fill ph-clock"></i> {{ Ctc.data_emissao_real.strftime('%H:%M') }}</div>
+                <div class="badge-prioridade {{ 'urgente' if 'URGENTE' in (Ctc.prioridade|upper) else 'normal' }}">
+                    {{ Ctc.prioridade or 'Normal' }}
                 </div>
             </div>
 
-            <div class="kpi-row">
-                <div class="kpi-box" style="{{ 'border-color: #7c3aed; background: rgba(124, 58, 237, 0.05);' if Ctc.is_consolidado else '' }}">
-                    <span class="kpi-lbl">Total Volumes</span>
-                    <span class="kpi-val">{{ Ctc.volumes }}</span>
-                </div>
-                <div class="kpi-box" style="{{ 'border-color: #7c3aed; background: rgba(124, 58, 237, 0.05);' if Ctc.is_consolidado else '' }}">
-                    <span class="kpi-lbl">Peso Total</span>
-                    <span class="kpi-val">{{ "{:.0f}".format(Ctc.peso) }} kg</span>
-                </div>
-                <div class="kpi-box" style="{{ 'border-color: #7c3aed; background: rgba(124, 58, 237, 0.05);' if Ctc.is_consolidado else '' }}">
-                    <span class="kpi-lbl">Valor Carga</span>
-                    <span class="kpi-val money">
-                        {% if Ctc.valor >= 1000000 %}
-                            R$ {{ "{:.1f}".format(Ctc.valor / 1000000).replace('.', ',') }}M
-                        {% elif Ctc.valor >= 1000 %}
-                            R$ {{ "{:.0f}".format(Ctc.valor / 1000) }}k
-                        {% else %}
-                            R$ {{ "{:,.0f}".format(Ctc.valor) }}
-                        {% endif %}
-                    </span>
-                </div>
+            <h2 class="route-title">
+                {{ Ctc.origem_cidade }} <i class="ph-bold ph-airplane-tilt"></i> {{ Ctc.destino_cidade }}
+            </h2>
+            <div class="route-subtitle">
+                <span>{{ Ctc.filial }}-{{ Ctc.serie }}-{{ Ctc.ctc }}</span> • 
+                <span>{{ Ctc.peso|float|round(2) }} kg</span> • 
+                <span>R$ {{ "{:,.2f}".format(Ctc.valor) }}</span>
             </div>
-            
-            {% if Ctc.is_consolidado %}
-            <div id="lista-docs-consolidacao" class="consolidation-wrapper" style="display:none;">
-                <div class="consolidation-header-row">
-                    <span class="consolidation-title">Composição do Lote Agrupado</span>
-                    <span class="consolidation-badge">{{ Ctc.lista_docs|length }} Itens</span>
-                </div>
-                
-                <div class="table-scroll-container">
-                    <table class="modern-table">
-                        <thead>
-                            <tr>
-                                <th style="text-align: left;">CTC / Destino</th>
-                                <th style="text-align: center;">Vol</th>
-                                <th style="text-align: right;">Peso</th>
-                                <th style="text-align: right;">Tipo</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for doc in Ctc.lista_docs %}
-                            <tr>
-                                <td>
-                                    <div class="doc-cod">{{ doc.ctc }}</div>
-                                    <div class="doc-dest" title="{{ doc.destinatario }}">
-                                        {{ doc.destinatario[:12] }}...
-                                    </div>
-                                </td>
-                                <td class="text-center strong-val">{{ doc.volumes }}</td>
-                                <td class="text-right strong-val">{{ "{:.0f}".format(doc.peso) }}</td>
-                                <td class="text-right">
-                                    {# Define cor da badge baseado no tipo #}
-                                    {% set tipo_clean = doc.tipo_carga|default('N/A')|upper %}
-                                    {% set badge_class = 'badge-red' if 'PERECIVEL' in tipo_clean else ('badge-blue' if 'SECA' in tipo_clean else 'badge-gray') %}
-                                    
-                                    <span class="type-badge {{ badge_class }}">
-                                        {{ tipo_clean[:4] }} </span>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endif %}
         </div>
 
-        <div class="timeline-content">
-            <div class="timeline-axis-wrapper">
-                <div class="timeline-line-bg"></div>
-                <div class="timeline-line-active" id="progress-line"></div>
-            </div>
+        <div class="strategy-tabs">
+            <button class="tab-btn active" onclick="SelecionarEstrategia('recomendada')" id="tab-recomendada" title="Melhor Custo-Benefício">
+                <i class="ph-duotone ph-star"></i> <span>Recomendada</span>
+            </button>
+            <button class="tab-btn" onclick="SelecionarEstrategia('mais_rapida')" id="tab-mais_rapida" title="Menor Tempo Total">
+                <i class="ph-duotone ph-lightning"></i> <span>Rápida</span>
+            </button>
+            <button class="tab-btn" onclick="SelecionarEstrategia('menor_custo')" id="tab-menor_custo" title="Menor Custo de Frete">
+                <i class="ph-duotone ph-coins"></i> <span>Econômica</span>
+            </button>
+            <button class="tab-btn" onclick="SelecionarEstrategia('menos_conexoes')" id="tab-menos_conexoes" title="Voo Direto ou Poucas Escalas">
+                <i class="ph-duotone ph-arrows-left-right"></i> <span>Direta</span>
+            </button>
+        </div>
 
-            <div class="step-item active" id="step-coleta">
-                <div class="step-marker-wrapper"><div class="radar-wave"></div><div class="step-marker"><i class="ph-fill ph-package"></i></div></div>
-                <div class="step-details"><div class="step-title">Origem / Coleta</div><div class="step-desc">{{ Origem.nome }}<br><small style="color: var(--cor-texto-secundario);">{{ Ctc.remetente.split(' ')[0] }}...</small></div></div>
-            </div>
+        <div class="strategy-summary" id="strategy-metrics">
+            <div class="metric-item"><span class="lbl">Custo Est.</span><span class="val">--</span></div>
+            <div class="metric-item"><span class="lbl">Tempo Total</span><span class="val">--</span></div>
+            <div class="metric-item"><span class="lbl">Conexões</span><span class="val">--</span></div>
+        </div>
 
-            <div class="step-item" id="step-aereo">
-                <div class="step-marker-wrapper">
-                    <div class="radar-wave"></div>
-                    <div class="step-marker">
-                        <i class="ph-fill ph-airplane-tilt"></i>
-                    </div>
-                </div>
-                
-                <div class="step-details">
-                    <div class="step-title">Transferência Aérea</div>
-                    
-                    {% if Rotas %}
-                        {% for voo in Rotas %}
-                            {# Lógica para definir a cor da companhia aérea #}
-                            {% set cia_cls = 'latam' if 'LA' in voo.cia or 'LATAM' in voo.cia else ('azul' if 'AD' in voo.cia or 'AZUL' in voo.cia else 'gol') %}
-                            
-                            <div class="flight-segment {{ cia_cls }}" 
-                                 id="card-flight-{{ loop.index0 }}"
-                                 onclick='SelecionarVoo({{ loop.index0 }}, {{ voo | tojson | safe }})'>
-                                
-                                <div class="fs-header">
-                                    <span>{{ voo.cia }} {{ voo.voo }}</span>
-                                    <span style="font-weight: 400; opacity:0.7;">{{ voo.data }}</span>
-                                </div>
-                                
-                                <div class="route-visual">
-                                    <div>
-                                        <div class="point-code">{{ voo.origem.iata }}</div>
-                                        <div class="point-time">{{ voo.horario_saida }}</div>
-                                    </div>
-                                    
-                                    <div class="flight-track-container">
-                                        <i id="plane-icon-{{ loop.index0 }}" class="ph-fill ph-airplane-tilt flight-icon-controlled"></i>
-                                    </div>
-
-                                    <div style="text-align: right;">
-                                        <div class="point-code">{{ voo.destino.iata }}</div>
-                                        <div class="point-time">{{ voo.horario_chegada }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="flight-segment" style="border-left: 3px solid var(--cor-borda); color: var(--cor-texto-secundario); padding: 15px;">
-                            <em>Nenhum voo alocado.</em>
-                        </div>
-                    {% endif %}
-                </div>
+        <div class="timeline-container" id="timeline-content">
+            <div class="loading-state" style="text-align:center; padding: 40px; color: #666;">
+                <i class="ph-bold ph-spinner ph-spin" style="font-size: 2rem;"></i> 
+                <p>Calculando melhores rotas...</p>
             </div>
+        </div>
 
-            <div class="step-item" id="step-entrega">
-                <div class="step-marker-wrapper"><div class="radar-wave"></div><div class="step-marker"><i class="ph-fill ph-flag-checkered"></i></div></div>
-                <div class="step-details"><div class="step-title">Destino Final</div><div class="step-desc">{{ Destino.nome }}<br><small style="color: var(--cor-texto-secundario);">{{ Ctc.destinatario.split(' ')[0] }}...</small></div></div>
-            </div>
+        <div class="sidebar-footer">
+            <a href="{{ url_for('Planejamento.Dashboard') }}" class="btn-cancel">Cancelar</a>
+            <button class="btn-confirm" onclick="ConfirmarPlanejamento()" id="btn-confirmar">
+                <i class="ph-bold ph-check-circle"></i> Confirmar Rota
+            </button>
         </div>
     </div>
-
-    <div id="map"></div>
 </div>
 
+{% if Ctc.is_consolidado %}
+<div id="modal-lote-backdrop" class="modal-backdrop hidden" onclick="FecharModalLote(event)">
+    <div class="glass-modal-large">
+        <div class="modal-header">
+            <h3><i class="ph-duotone ph-stack"></i> Composição do Lote</h3>
+            <button class="btn-close" onclick="FecharModalLote(null)"><i class="ph-bold ph-x"></i></button>
+        </div>
+        
+        <div class="modal-body-scroll">
+            <table class="glass-table">
+                <thead>
+                    <tr>
+                        <th>Documento</th>
+                        <th>Destinatário</th>
+                        <th class="text-center">Vol</th>
+                        <th class="text-right">Peso</th>
+                        <th class="text-right">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in Ctc.lista_docs %}
+                    <tr>
+                        <td class="fw-bold">{{ doc.filial }}-{{ doc.serie }}-{{ doc.ctc }}</td>
+                        <td>{{ doc.destinatario[:25] }}...</td>
+                        <td class="text-center">{{ doc.volumes }}</td>
+                        <td class="text-right">{{ doc.peso|float|round(2) }} kg</td>
+                        <td class="text-right">R$ {{ "{:,.2f}".format(doc.valor) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="2" class="text-right fw-bold">TOTAL DO LOTE:</td>
+                        <td class="text-center fw-bold">{{ Ctc.volumes }}</td>
+                        <td class="text-right fw-bold">{{ Ctc.peso|float|round(2) }} kg</td>
+                        <td class="text-right fw-bold">R$ {{ "{:,.2f}".format(Ctc.valor) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <script>
-    // --- VARIÁVEIS DE DADOS (Jinja -> JS) ---
-    // Estas variáveis precisam ficar aqui pois são renderizadas pelo servidor
-    const URL_GRAVAR_PLANEJAMENTO = "{{ url_for('Planejamento.SalvarPlanejamento') }}";
-    
-    // Tornamos as variáveis globais (window) para que o arquivo JS externo possa acessá-las
+    window.opcoesRotas = {{ OpcoesRotas | tojson | safe }};
     window.ctc = {{ Ctc | tojson | safe }};
-    window.rotas = {{ Rotas | tojson | safe }};
-    window.origem = { lat: {{ Origem.lat | default(0) }}, lon: {{ Origem.lon | default(0) }} };
-    window.destino = { lat: {{ Destino.lat | default(0) }}, lon: {{ Destino.lon | default(0) }} };
-
-    // Strings simples para uso nos Popups
-    window.GLOBAL_ORIGEM_NOME = "{{ Origem.nome }}";
-    window.GLOBAL_ORIGEM_UF = "{{ Origem.uf }}";
-    window.GLOBAL_DESTINO_NOME = "{{ Destino.nome }}";
-    window.GLOBAL_DESTINO_UF = "{{ Destino.uf }}";
+    window.origemCoords = { lat: {{ Origem.lat | default(0) }}, lon: {{ Origem.lon | default(0) }} };
+    window.destinoCoords = { lat: {{ Destino.lat | default(0) }}, lon: {{ Destino.lon | default(0) }} };
+    const URL_GRAVAR_PLANEJAMENTO = "{{ url_for('Planejamento.SalvarPlanejamento') }}";
 </script>
-
 <script src="{{ url_for('static', filename='JS/Planejamento/Editor.js') }}"></script>
-
 {% endblock %}

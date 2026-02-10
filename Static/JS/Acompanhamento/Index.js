@@ -7,6 +7,10 @@ var map = null;
 var layerGeral = new L.LayerGroup(); 
 var layerFoco = new L.LayerGroup();  
 
+// --- OTIMIZAÇÃO: RENDERIZADOR CANVAS ---
+// Corrige o bug de linhas piscando/sumindo no zoom e melhora performance
+var canvasRenderer = L.canvas({ padding: 0.5 });
+
 document.addEventListener('DOMContentLoaded', () => { 
     InitMap(); 
     CarregarDados(); 
@@ -23,15 +27,59 @@ function GetCorPorCia(texto) {
 
 function InitMap() {
     if(map) return;
-    map = L.map('mapa-voos', { zoomControl: false }).setView([-14.2350, -51.9253], 4);
+    map = L.map('mapa-voos', { 
+        zoomControl: false,
+        renderer: canvasRenderer // Força o uso do Canvas globalmente
+    }).setView([-14.2350, -51.9253], 4);
+
     L.control.zoom({ position: 'topright' }).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; Luft-ConnectAir', maxZoom: 18 }).addTo(map);
+    
+    // Mapa mais limpo (CartoDB Light)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { 
+        attribution: '&copy; Luft-ConnectAir', 
+        maxZoom: 18 
+    }).addTo(map);
+
     layerGeral.addTo(map);
     layerFoco.addTo(map);
 }
 
+// --- FUNÇÃO MATEMÁTICA PARA GERAR CURVAS (ARCOS) ---
+// Deixa a rota mais bonita e realista sem pesar o sistema
+function GetPontosCurva(latlng1, latlng2) {
+    var lat1 = latlng1[0], lng1 = latlng1[1];
+    var lat2 = latlng2[0], lng2 = latlng2[1];
+    
+    // Se for muito perto, desenha reta mesmo para economizar
+    if (Math.abs(lat1 - lat2) < 2 && Math.abs(lng1 - lng2) < 2) {
+        return [latlng1, latlng2];
+    }
+
+    var offsetX = lng2 - lng1;
+    var offsetY = lat2 - lat1;
+    var r = Math.sqrt(Math.pow(offsetX, 2) + Math.pow(offsetY, 2));
+    var theta = Math.atan2(offsetY, offsetX);
+    
+    var thetaOffset = (3.14 / 10); // Curvatura (ajuste se quiser mais/menos arco)
+    var r2 = (r / 2) / (Math.cos(thetaOffset));
+    var theta2 = theta + thetaOffset;
+    var midX = (lng1 + lng2) / 2 + Math.cos(theta2) * r2; // Ponto de controle virtual
+    var midY = (lat1 + lat2) / 2 + Math.sin(theta2) * r2;
+    
+    var midPoint = [midY, midX]; // Aproximação Bezier quadrática simples
+    
+    // Gera 20 pontos interpolados para suavidade
+    var points = [];
+    for (var i = 0; i <= 20; i++) {
+        var t = i / 20;
+        var lat = (1 - t) * (1 - t) * lat1 + 2 * (1 - t) * t * midY + t * t * lat2;
+        var lng = (1 - t) * (1 - t) * lng1 + 2 * (1 - t) * t * midX + t * t * lng2;
+        points.push([lat, lng]);
+    }
+    return points;
+}
+
 function CarregarDados() {
-    // 1. Captura os valores dos inputs
     const inicio = document.getElementById('dataInicio').value;
     const fim = document.getElementById('dataFim').value;
     const awbBusca = document.getElementById('buscaAwb').value;
@@ -39,18 +87,14 @@ function CarregarDados() {
 
     const tbody = document.querySelector('#tabela-awbs tbody');
 
-    // 2. Estado de Carregamento
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:60px; color:var(--cor-texto-secundario);"><i class="ph-spinner ph-spin" style="font-size:28px;"></i><br><span style="margin-top:10px; display:block">Buscando cargas...</span></td></tr>`;
     
     ResetarMapaVisual(); 
 
-    // 3. Montagem da URL usando o objeto de configuração global
     let url = `${APP_CONFIG.urls.listarAwbs}?dataInicio=${inicio}&dataFim=${fim}`;
-    
     if(awbBusca) url += `&numeroAwb=${encodeURIComponent(awbBusca)}`;
     if(filialCtcBusca) url += `&filialCtc=${encodeURIComponent(filialCtcBusca)}`;
 
-    // 4. Requisição
     fetch(url)
         .then(res => res.json())
         .then(data => {
@@ -67,7 +111,6 @@ function CarregarDados() {
                 const rowId = `row-${awb.CodigoId}`;
                 const corCia = GetCorPorCia(awb.CiaAerea);
 
-                // Lógica de Status (Cores das Badges)
                 let badgeClass = 'badge-secondary';
                 const status = awb.Status ? awb.Status.toUpperCase() : '';
 
@@ -81,7 +124,6 @@ function CarregarDados() {
                 else if (warningStatus.some(s => status.includes(s))) badgeClass = 'badge-warning';
                 else if (infoStatus.some(s => status.includes(s))) badgeClass = 'badge-info';
 
-                // Coluna Voo Interativo
                 let htmlVoo = '<span style="color:#ccc;">-</span>';
                 if(awb.Voo && awb.Voo.length > 2) {
                     htmlVoo = `<span class="voo-interativo" title="Duplo clique para detalhes do voo" 
@@ -89,7 +131,6 @@ function CarregarDados() {
                                <i class="ph-bold ph-airplane-tilt"></i> ${awb.Voo}</span>`;
                 }
 
-                // Criação da Linha Principal
                 let trMain = document.createElement('tr');
                 trMain.className = 'row-main';
                 trMain.id = rowId;
@@ -103,13 +144,11 @@ function CarregarDados() {
                     <td style="text-align:center;">
                         <i class="ph-bold ph-caret-right" id="icon-${rowId}" style="color:#64748b;"></i>
                     </td>
-
                     <td style="font-weight:700; color:var(--cor-primaria); font-family:monospace; cursor:pointer;"
                         title="Duplo clique para ver detalhes completos da Carga"
                         ondblclick="AbrirModalAwbDetalhes('${awb.CodigoId}', event)">
                         ${awb.Numero}
                     </td>
-
                     <td><span style="font-weight:600; color:${corCia};">${awb.CiaAerea || 'INDEF'}</span></td>
                     <td><span style="font-weight:700;">${awb.Origem}</span> <i class="ph-bold ph-arrow-right" style="font-size:0.8rem; color:#ccc;"></i> <span style="font-weight:700;">${awb.Destino}</span></td>
                     <td>${htmlVoo}</td>
@@ -118,7 +157,6 @@ function CarregarDados() {
                     <td style="color:var(--cor-texto-secundario); font-size:0.8rem;">${awb.DataStatus}</td>
                 `;
 
-                // Criação da Linha de Detalhe
                 let trDetail = document.createElement('tr');
                 trDetail.id = `detail-${rowId}`;
                 trDetail.style.display = 'none';
@@ -132,7 +170,17 @@ function CarregarDados() {
 
 function PlotarRotaResumo(awb) {
     if(awb.RotaMap && awb.RotaMap.Origem) {
-        const linha = L.polyline([awb.RotaMap.Origem, awb.RotaMap.Destino], { color: GetCorPorCia(awb.CiaAerea), weight: 2, opacity: 0.4, dashArray: '3, 6' });
+        // Usa a função de curva
+        const pontos = GetPontosCurva(awb.RotaMap.Origem, awb.RotaMap.Destino);
+        
+        const linha = L.polyline(pontos, { 
+            color: GetCorPorCia(awb.CiaAerea), 
+            weight: 1.5, // Linha mais fina para o resumo 
+            opacity: 0.5, 
+            dashArray: '3, 6',
+            renderer: canvasRenderer, // IMPORTANTE: Usa Canvas
+            smoothFactor: 1 
+        });
         linha.awbNumero = awb.Numero; 
         linha.addTo(layerGeral);
     }
@@ -153,7 +201,6 @@ function ToggleTree(numeroAwb, rowId) {
         icon.style.transform = 'rotate(90deg)';
         FocarRotaNoMapa(numeroAwb);
         
-        // Uso da URL configurada
         fetch(`${APP_CONFIG.urls.historico}${encodeURIComponent(numeroAwb)}`)
             .then(res => res.json())
             .then(resp => {
@@ -202,7 +249,8 @@ function RenderizarTimeline(data, container) {
 }
 
 function FocarRotaNoMapa(numeroAwb) {
-    layerGeral.eachLayer(l => l.setStyle({ opacity: l.awbNumero === numeroAwb ? 0 : 0.05 }));
+    // Esconde as outras rotas (opacity 0)
+    layerGeral.eachLayer(l => l.setStyle({ opacity: l.awbNumero === numeroAwb ? 0 : 0.03 })); // 0.03 deixa BEM sutil no fundo
     layerFoco.clearLayers();
 }
 
@@ -211,40 +259,63 @@ function DesenharRotaReal(data, numeroAwb) {
     const pendente = data.RotaPendente;
     let bounds = [];
     
-    const iconDot = (c) => L.divIcon({ html: `<div style="background:${c}; width:12px; height:12px; border:2px solid #fff; border-radius:50%; box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>` });
-    const iconPlane = (c) => L.divIcon({ html: `<div style="background:${c}; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border:2px solid #fff; border-radius:6px;"><i class="ph-fill ph-airplane-tilt" style="color:#fff; font-size:16px;"></i></div>`, iconSize: [26, 26] });
+    const iconDot = (c) => L.divIcon({ html: `<div style="background:${c}; width:12px; height:12px; border:2px solid #fff; border-radius:50%; box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`, className: '' });
+    const iconPlane = (c) => L.divIcon({ html: `<div style="background:${c}; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border:2px solid #fff; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,0.2);"><i class="ph-fill ph-airplane-tilt" style="color:#fff; font-size:16px;"></i></div>`, iconSize: [26, 26], className: '' });
 
     if(trajetos.length > 0) {
+        // Marcador Origem Inicial
         L.marker(trajetos[0].CoordOrigem, { icon: iconDot('#10b981') }).addTo(layerFoco).bindPopup(`Origem: ${trajetos[0].Origem}`);
         bounds.push(trajetos[0].CoordOrigem);
 
         trajetos.forEach((leg, idx) => {
-            L.polyline([leg.CoordOrigem, leg.CoordDestino], { color: GetCorPorCia(leg.Voo), weight: 4, opacity: 0.9 }).addTo(layerFoco);
+            // Rota Curva Real
+            const pts = GetPontosCurva(leg.CoordOrigem, leg.CoordDestino);
+            
+            L.polyline(pts, { 
+                color: GetCorPorCia(leg.Voo), 
+                weight: 3, 
+                opacity: 0.9,
+                renderer: canvasRenderer,
+                lineCap: 'round'
+            }).addTo(layerFoco);
             
             if(idx === trajetos.length - 1) {
+                // Se tem pendente, o avião é laranja (conexão), senão verde (chegou ou último ponto conhecido)
                 let ic = pendente ? iconPlane('#f59e0b') : iconPlane('#10b981');
                 L.marker(leg.CoordDestino, { icon: ic }).addTo(layerFoco);
             } else {
-                L.marker(leg.CoordDestino, { icon: iconDot('#fff') }).addTo(layerFoco);
+                // Escala intermediária
+                L.marker(leg.CoordDestino, { icon: iconDot('#64748b') }).addTo(layerFoco);
             }
             bounds.push(leg.CoordDestino);
         });
     } else if (pendente) {
+            // Se só tem pendente (sem voo realizado ainda)
             L.marker(pendente.CoordOrigem, { icon: iconPlane('#ef4444') }).addTo(layerFoco);
             bounds.push(pendente.CoordOrigem);
     }
 
     if (pendente) {
-        L.polyline([pendente.CoordOrigem, pendente.CoordDestino], { color: '#94a3b8', weight: 3, dashArray: '5, 10' }).addTo(layerFoco);
+        // Rota Pendente Curva
+        const ptsPendente = GetPontosCurva(pendente.CoordOrigem, pendente.CoordDestino);
+        L.polyline(ptsPendente, { 
+            color: '#94a3b8', 
+            weight: 2, 
+            dashArray: '5, 8',
+            opacity: 0.8,
+            renderer: canvasRenderer 
+        }).addTo(layerFoco);
+        
         L.marker(pendente.CoordDestino, { icon: iconDot('#cbd5e1') }).addTo(layerFoco);
         bounds.push(pendente.CoordDestino);
     }
 
-    if(bounds.length > 0) map.fitBounds(bounds, { padding: [60, 60] });
+    if(bounds.length > 0) map.fitBounds(bounds, { padding: [80, 80] });
 }
 
 function ResetarMapaVisual() {
     layerFoco.clearLayers();
+    // Restaura opacidade das linhas de fundo
     layerGeral.eachLayer(l => l.setStyle({ opacity: 0.3 }));
     map.setView([-14.2350, -51.9253], 4);
 }
@@ -258,7 +329,6 @@ function AbrirModalVoo(numero, dataRef, event) {
     
     document.getElementById('mv-numero').innerText = 'BUSCANDO...';
     
-    // Uso da URL configurada
     const url = `${APP_CONFIG.urls.detalhesVoo}?numeroVoo=${numero}&dataRef=${dataRef}`;
 
     fetch(url)

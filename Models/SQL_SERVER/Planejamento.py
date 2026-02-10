@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Numeric, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Numeric, ForeignKey, Boolean, Time
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from Models.SQL_SERVER.Base import Base
@@ -12,12 +12,10 @@ class PlanejamentoCabecalho(Base):
     UsuarioCriacao = Column(String(50)) 
     Status = Column(String(20), default='Rascunho')
     
-    # Mantive as colunas string para facilitar a leitura rápida, 
-    # mas o vínculo real acontece nos IDs abaixo
     AeroportoOrigem = Column(String(3)) 
     AeroportoDestino = Column(String(3)) 
     
-    # NOVAS CHAVES ESTRANGEIRAS (FK)
+    # IDs vinculados
     IdAeroportoOrigem = Column(Integer, ForeignKey('intec.dbo.Tb_PLN_Aeroporto.Id'), nullable=True)
     IdAeroportoDestino = Column(Integer, ForeignKey('intec.dbo.Tb_PLN_Aeroporto.Id'), nullable=True)
 
@@ -25,12 +23,9 @@ class PlanejamentoCabecalho(Base):
     TotalPeso = Column(Numeric(10,2), default=0.00)
     TotalValor = Column(Numeric(15,2), default=0.00)
 
-    # Relacionamentos Internos
     Itens = relationship("PlanejamentoItem", back_populates="Cabecalho", cascade="all, delete-orphan")
     Trechos = relationship("PlanejamentoTrecho", back_populates="Cabecalho", cascade="all, delete-orphan")
 
-    # Relacionamentos Externos (Com Aeroporto)
-    # Usamos foreign_keys para diferenciar Origem de Destino
     AeroportoOrigemObj = relationship("Aeroporto", foreign_keys=[IdAeroportoOrigem])
     AeroportoDestinoObj = relationship("Aeroporto", foreign_keys=[IdAeroportoDestino])
 
@@ -49,11 +44,10 @@ class PlanejamentoItem(Base):
     Remetente = Column(String(100))
     Destinatario = Column(String(100))
     
-    # Strings originais
     OrigemCidade = Column(String(50))
     DestinoCidade = Column(String(50))
 
-    # NOVAS CHAVES ESTRANGEIRAS (FK) PARA CIDADES
+    # IDs vinculados
     IdCidadeOrigem = Column(Integer, ForeignKey('intec.dbo.Tb_PLN_Cidade.Id'), nullable=True)
     IdCidadeDestino = Column(Integer, ForeignKey('intec.dbo.Tb_PLN_Cidade.Id'), nullable=True)
 
@@ -64,7 +58,6 @@ class PlanejamentoItem(Base):
     
     Cabecalho = relationship("PlanejamentoCabecalho", back_populates="Itens")
 
-    # Relacionamentos Externos (Com Cidade)
     CidadeOrigemObj = relationship("Cidade", foreign_keys=[IdCidadeOrigem])
     CidadeDestinoObj = relationship("Cidade", foreign_keys=[IdCidadeDestino])
 
@@ -80,16 +73,19 @@ class PlanejamentoTrecho(Base):
     CiaAerea = Column(String(50))
     NumeroVoo = Column(String(20))
     
-    # NOVA CHAVE ESTRANGEIRA PARA A MALHA AÉREA
-    # Nullable=True pois pode ser um voo charter ou rodoviário que não está na malha importada
     IdVoo = Column(Integer, ForeignKey('intec.dbo.Tb_PLN_Voo.Id'), nullable=True)
 
     AeroportoOrigem = Column(String(3))
     AeroportoDestino = Column(String(3))
 
-    # NOVAS CHAVES ESTRANGEIRAS PARA AEROPORTOS (Trecho)
     IdAeroportoOrigem = Column(Integer, ForeignKey('intec.dbo.Tb_PLN_Aeroporto.Id'), nullable=True)
     IdAeroportoDestino = Column(Integer, ForeignKey('intec.dbo.Tb_PLN_Aeroporto.Id'), nullable=True)
+
+    # --- NOVAS COLUNAS SOLICITADAS ---
+    IdFrete = Column(Integer, ForeignKey('intec.dbo.Tb_PLN_Frete.Id'), nullable=True)
+    TipoServico = Column(String(100), nullable=True) # Ex: Standard, Expresso
+    HorarioCorte = Column(Time, nullable=True)       # Ex: 18:00
+    DataCorte = Column(DateTime, nullable=True)      # Data/Hora absoluta do corte
 
     DataPartida = Column(DateTime)
     DataChegada = Column(DateTime)
@@ -97,7 +93,9 @@ class PlanejamentoTrecho(Base):
 
     Cabecalho = relationship("PlanejamentoCabecalho", back_populates="Trechos")
     
-    # Relacionamentos Externos
     VooObj = relationship("VooMalha", foreign_keys=[IdVoo])
     AeroportoOrigemObj = relationship("Aeroporto", foreign_keys=[IdAeroportoOrigem])
     AeroportoDestinoObj = relationship("Aeroporto", foreign_keys=[IdAeroportoDestino])
+    
+    # Novo relacionamento com Frete
+    FreteObj = relationship("TabelaFrete", foreign_keys=[IdFrete])
