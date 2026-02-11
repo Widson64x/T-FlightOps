@@ -30,10 +30,9 @@ function getCiaConfig(ciaName) {
     return CIA_CONFIG[key] || CIA_CONFIG['DEFAULT'];
 }
 
-// Função Utilitária para Formatar Moeda
+// Função Utilitária para Formatar Moeda (Apenas para fallbacks ou displays extras)
 function formatMoney(value) {
     if (value === undefined || value === null) return 'R$ 0,00';
-    // Se o backend mandar string já formatada (ex: "R$ 1.200,00"), retorna direto
     if (typeof value === 'string' && value.includes('R$')) return value;
     return parseFloat(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -121,13 +120,13 @@ function RenderizarRotaNoMapa(listaTrechos) {
         const destino = [trecho.destino.lat, trecho.destino.lon];
         const ciaInfo = getCiaConfig(trecho.cia);
 
-        // -- DADOS FINANCEIROS (Nova Estrutura) --
+        // -- DADOS FINANCEIROS (Backend) --
         const baseCalc = trecho.base_calculo || {};
         const tarifa = baseCalc.tarifa || 0;
-        const peso = window.ctc.peso_taxado || baseCalc.peso_usado || 0;
         const servico = baseCalc.servico || 'STD';
-        // Calculamos o custo do trecho aqui (Tarifa * Peso)
-        const custoTrecho = tarifa * peso;
+        
+        // Uso direto do valor calculado pelo backend
+        const custoTrechoFmt = baseCalc.custo_trecho_fmt || 'R$ 0,00';
 
         // Linha do Voo
         const polyline = L.polyline([origem, destino], {
@@ -157,7 +156,7 @@ function RenderizarRotaNoMapa(listaTrechos) {
         });
         const planeMarker = L.marker([midLat, midLon], { icon: planeIcon }).addTo(routeLayerGroup);
 
-        // Popup Rico (Atualizado com termos corretos)
+        // Popup Rico
         const popupContent = `
             <div class="popup-flight-info">
                 <div class="popup-header">
@@ -177,7 +176,7 @@ function RenderizarRotaNoMapa(listaTrechos) {
                     <div class="popup-details">
                         <div class="detail-row"><strong>Serviço:</strong> <span>${servico}</span></div>
                         <div class="detail-row"><strong>Tarifa:</strong> <span>${formatMoney(tarifa)}/kg</span></div>
-                        <div class="detail-row total"><strong>Custo Trecho:</strong> <span>${formatMoney(custoTrecho)}</span></div>
+                        <div class="detail-row total"><strong>Custo Trecho:</strong> <span>${custoTrechoFmt}</span></div>
                     </div>
                 </div>
             </div>
@@ -242,12 +241,12 @@ function RenderizarTimeline(listaTrechos) {
     listaTrechos.forEach((trecho, idx) => {
         const ciaInfo = getCiaConfig(trecho.cia);
         
-        // -- DADOS FINANCEIROS (Nova Estrutura) --
+        // -- DADOS FINANCEIROS (Backend) --
         const baseCalc = trecho.base_calculo || {};
         const tarifa = baseCalc.tarifa || 0;
-        const peso = window.ctc.peso_taxado || baseCalc.peso_usado || 0;
         const servico = baseCalc.servico || 'STD';
-        const custoTrecho = tarifa * peso;
+        // Uso direto
+        const custoTrechoFmt = baseCalc.custo_trecho_fmt || 'R$ 0,00';
 
         if (idx > 0) {
             html += `<div class="connection-line"><i class="ph-bold ph-clock-clockwise"></i> Conexão em ${trecho.origem.iata}</div>`;
@@ -286,7 +285,7 @@ function RenderizarTimeline(listaTrechos) {
                     </div>
                     <div class="info-badge cost">
                         <span class="label">Custo</span>
-                        <span class="value">${formatMoney(custoTrecho)}</span>
+                        <span class="value">${custoTrechoFmt}</span>
                     </div>
                 </div>
             </div>
@@ -303,14 +302,11 @@ function AtualizarMetricas(listaTrechos) {
         return;
     }
     
-    // O backend agora envia 'total_custo' (string formatada) e 'total_duracao'
-    // dentro de cada objeto da lista (pois são métricas da rota inteira)
     const resumo = listaTrechos[0]; 
-    
     const els = container.children;
     
-    // Custo Total (Já vem formatado do back, ex: "R$ 1.500,00")
-    els[0].querySelector('.val').innerText = resumo.total_custo || '--'; 
+    // Custo Total: usa o valor formatado vindo do backend
+    els[0].querySelector('.val').innerText = resumo.total_custo_fmt || resumo.total_custo || '--'; 
     
     // Tempo Total
     els[1].querySelector('.val').innerText = resumo.total_duracao || '--:--';
@@ -330,7 +326,6 @@ window.ConfirmarPlanejamento = function() {
     btn.disabled = true;
     btn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Processando...';
 
-    // Formata a rota para envio ao backend, extraindo os dados de base_calculo
     const rotaFormatada = currentState.rotaSelecionada.map(trecho => {
         const base = trecho.base_calculo || {};
         return {
@@ -341,10 +336,12 @@ window.ConfirmarPlanejamento = function() {
             partida_iso: InverterData(trecho.data) + 'T' + trecho.horario_saida + ':00',
             chegada_iso: InverterData(trecho.data) + 'T' + trecho.horario_chegada + ':00',
             
-            // Mapeando para os campos que o banco espera ao salvar
+            // Mapeando dados para salvar
             servico: base.servico || null,
             valor_tarifa: base.tarifa || 0,
-            peso_cobrado: base.peso_usado || 0
+            peso_cobrado: base.peso_usado || 0,
+            // (Opcional) Passar o custo calculado se o backend de salvamento precisar
+            custo_calculado: base.custo_trecho || 0
         };
     });
 

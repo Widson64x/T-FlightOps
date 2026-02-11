@@ -10,6 +10,7 @@ from Conexoes import ObterSessaoSqlServer as ObterSessao
 # AJUSTE 2: Importar os modelos da pasta SQL_SERVER
 from Models.SQL_SERVER.Aeroporto import RemessaAeroportos, Aeroporto
 from Configuracoes import ConfiguracaoBase
+from Models.SQL_SERVER.Planejamento import RankingAeroportos
 from Services.LogService import LogService
 
 DIR_TEMP = ConfiguracaoBase.DIR_TEMP
@@ -216,5 +217,111 @@ class AeroportoService:
         except Exception as e:
             LogService.Error("AeroportoService", "Erro ao listar para select.", e)
             return []
+        finally:
+            Sessao.close()         
+
+    @staticmethod
+    def ListarAeroportosPorEstado():
+        """
+        Busca aeroportos BR, agrupa por UF (convertendo NomeRegiao) 
+        e traz o índice de importância salvo (se houver).
+        """
+        Sessao = ObterSessao()
+        try:
+            # Mapa de De-Para (NomeRegiao do Banco -> Sigla UF)
+            MapaRegiaoUf = {
+                'SAO PAULO': 'SP', 'RIO DE JANEIRO': 'RJ', 'MINAS GERAIS': 'MG',
+                'ESPIRITO SANTO': 'ES', 'PARANA': 'PR', 'SANTA CATARINA': 'SC',
+                'RIO GRANDE DO SUL': 'RS', 'BAHIA': 'BA', 'PERNAMBUCO': 'PE',
+                'CEARA': 'CE', 'DISTRITO FEDERAL': 'DF', 'GOIAS': 'GO',
+                'AMAZONAS': 'AM', 'PARA': 'PA', 'MATO GROSSO': 'MT',
+                'MATO GROSSO DO SUL': 'MS', 'ACRE': 'AC', 'ALAGOAS': 'AL',
+                'AMAPA': 'AP', 'MARANHAO': 'MA', 'PARAIBA': 'PB',
+                'PIAUI': 'PI', 'RIO GRANDE DO NORTE': 'RN', 'RONDONIA': 'RO',
+                'RORAIMA': 'RR', 'SERGIPE': 'SE', 'TOCANTINS': 'TO'
+            }
+
+            # 1. Busca Aeroportos BR
+            Aeroportos = Sessao.query(Aeroporto).filter(
+                Aeroporto.CodigoPais == 'BR'
+            ).order_by(Aeroporto.NomeRegiao, Aeroporto.NomeAeroporto).all()
+
+            # 2. Busca Rankings Já Salvos
+            Rankings = Sessao.query(RankingAeroportos).all()
+            MapRankings = {f"{r.Uf}-{r.IdAeroporto}": r.IndiceImportancia for r in Rankings}
+
+            DadosAgrupados = {}
+
+            for aero in Aeroportos:
+                if not aero.NomeRegiao: continue
+                
+                regiao_upper = str(aero.NomeRegiao).upper().strip()
+                
+                # Tenta converter, senão usa as 2 primeiras letras como fallback
+                uf_sigla = MapaRegiaoUf.get(regiao_upper, regiao_upper[:2])
+
+                if uf_sigla not in DadosAgrupados:
+                    DadosAgrupados[uf_sigla] = []
+
+                # Verifica se já tem ranking salvo
+                chave = f"{uf_sigla}-{aero.Id}"
+                importancia = MapRankings.get(chave, 0) # Default 0
+
+                DadosAgrupados[uf_sigla].append({
+                    'id_aeroporto': aero.Id,
+                    'iata': aero.CodigoIata,
+                    'nome': aero.NomeAeroporto,
+                    # CORREÇÃO AQUI: Usando NomeRegiao e a chave 'regiao'
+                    'regiao': aero.NomeRegiao, 
+                    'importancia': importancia
+                })
+
+            # Retorna ordenado por UF
+            return dict(sorted(DadosAgrupados.items()))
+
+        except Exception as e:
+            LogService.Error("AeroportosService", "Erro ao listar aeroportos por estado", e)
+            return {}
+        finally:
+            Sessao.close()
+
+    @staticmethod
+    def SalvarRankingUf(uf, lista_dados):
+        """
+        Recebe UF e lista de {id_aeroporto, importancia}.
+        Atualiza ou Insere na Tb_PLN_RankingAeroportos.
+        """
+        Sessao = ObterSessao()
+        try:
+            uf = str(uf).upper().strip()
+            
+            for item in lista_dados:
+                id_aero = int(item['id_aeroporto'])
+                valor = int(item['importancia'])
+                
+                if valor < 0: valor = 0
+                if valor > 100: valor = 100
+
+                Registro = Sessao.query(RankingAeroportos).filter(
+                    RankingAeroportos.Uf == uf,
+                    RankingAeroportos.IdAeroporto == id_aero
+                ).first()
+
+                if Registro:
+                    Registro.IndiceImportancia = valor
+                else:
+                    Novo = RankingAeroportos(
+                        Uf=uf,
+                        IdAeroporto=id_aero,
+                        IndiceImportancia=valor
+                    )
+                    Sessao.add(Novo)
+            
+            Sessao.commit()
+            return True, "Rankings atualizados com sucesso."
+        except Exception as e:
+            Sessao.rollback()
+            LogService.Error("AeroportosService", f"Erro ao salvar ranking UF {uf}", e)
+            return False, str(e)
         finally:
             Sessao.close()

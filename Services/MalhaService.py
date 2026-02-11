@@ -302,7 +302,7 @@ class MalhaService:
         finally:
             Sessao.close()
 
-    # --- MÉTODOS AUXILIARES (Mantidos Identicos, apenas garantindo que estejam aqui) ---
+    # --- MÉTODOS AUXILIARES ---
 
     @staticmethod
     def _ValidarCaminhoCronologico(Grafo, ListaNos, DataInicio):
@@ -374,15 +374,25 @@ class MalhaService:
             mins //= 60
             duracao_fmt = f"{dias}d {horas:02}:{mins:02}" if dias > 0 else f"{horas:02}:{mins:02}"
             custo_fmt = f"R$ {Metricas['custo']:,.2f}"
-            InfoAdicional = {'total_duracao': duracao_fmt, 'total_custo': custo_fmt}
+            
+            # ATUALIZADO: Passando custo total formatado e raw para o Frontend
+            InfoAdicional = {
+                'total_duracao': duracao_fmt, 
+                'total_custo': custo_fmt,  # Compatibilidade
+                'total_custo_fmt': custo_fmt, # Nomenclatura explicita
+                'total_custo_raw': Metricas['custo']
+            }
 
-        for i, Voo in enumerate(ListaVoos):
+        for i, Voo in enumerate(ListaVoos): # O enumerate é para acessar detalhes tarifários por índice
             Orig = Cache.get(Voo.AeroportoOrigem, {'nome': Voo.AeroportoOrigem})
             Dest = Cache.get(Voo.AeroportoDestino, {'nome': Voo.AeroportoDestino})
             
             dados_frete = {}
             if DetalhesTarifas and i < len(DetalhesTarifas):
                 dados_frete = DetalhesTarifas[i]
+
+            # Captura o custo do trecho já calculado pelo backend
+            custo_trecho = dados_frete.get('custo_calculado', 0.0)
 
             Resultado.append({
                 'tipo_resultado': Tipo,
@@ -397,7 +407,11 @@ class MalhaService:
                     'tarifa': dados_frete.get('tarifa_base', 0.0),
                     'servico': dados_frete.get('servico', 'STANDARD'),
                     'cia_tabela': dados_frete.get('cia_tarifaria', Voo.CiaAerea),
-                    'peso_usado': dados_frete.get('peso_calculado', 0)
+                    'peso_usado': dados_frete.get('peso_calculado', 0),
+                    
+                    # ATUALIZADO: Passando custos calculados
+                    'custo_trecho': custo_trecho,
+                    'custo_trecho_fmt': f"R$ {custo_trecho:,.2f}"
                 },
                 **InfoAdicional
             })
