@@ -108,7 +108,7 @@
                         <td class="fw-bold">{{ doc.filial }}-{{ doc.serie }}-{{ doc.ctc }}</td>
                         <td>{{ doc.destinatario[:25] }}...</td>
                         <td class="text-center">{{ doc.volumes }}</td>
-                        <td class="text-right">{{ doc.peso|float|round(2) }} kg</td>
+                        <td class="text-right">{{ doc.peso_fisico|float|round(2) }} kg</td>
                         <td class="text-right">R$ {{ "{:,.2f}".format(doc.valor) }}</td>
                     </tr>
                     {% endfor %}
@@ -117,7 +117,7 @@
                     <tr>
                         <td colspan="2" class="text-right fw-bold">TOTAL DO LOTE:</td>
                         <td class="text-center fw-bold">{{ Ctc.volumes }}</td>
-                        <td class="text-right fw-bold">{{ Ctc.peso|float|round(2) }} kg</td>
+                        <td class="text-right fw-bold">{{ Ctc.peso_fisico|float|round(2) }} kg</td>
                         <td class="text-right fw-bold">R$ {{ "{:,.2f}".format(Ctc.valor) }}</td>
                     </tr>
                 </tfoot>

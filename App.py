@@ -96,10 +96,10 @@ app.register_blueprint(EscalasBp, url_prefix=f'{Prefix}/Escalas')
 app.register_blueprint(AcompanhamentoBP, url_prefix=f'{Prefix}/Acompanhamento')
 app.register_blueprint(FreteBp, url_prefix=f'{Prefix}/Fretes')
 app.register_blueprint(ReversaBp, url_prefix=f'{Prefix}/Reversa')
-app.register_blueprint(MalhaBp, url_prefix=Prefix)
-app.register_blueprint(AeroportoBp, url_prefix=Prefix)
-app.register_blueprint(CidadeBp, url_prefix=Prefix)
-app.register_blueprint(GlobalBp, url_prefix=Prefix)
+app.register_blueprint(MalhaBp, url_prefix=f'{Prefix}/Malha')
+app.register_blueprint(AeroportoBp, url_prefix=f'{Prefix}/Aeroportos')
+app.register_blueprint(CidadeBp, url_prefix=f'{Prefix}/Cidades')
+app.register_blueprint(GlobalBp, url_prefix=f'{Prefix}/Global')
 
 
 # Rota principal do Dashboard com o prefixo

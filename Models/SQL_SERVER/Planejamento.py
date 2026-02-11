@@ -99,3 +99,15 @@ class PlanejamentoTrecho(Base):
     
     # Novo relacionamento com Frete
     FreteObj = relationship("TabelaFrete", foreign_keys=[IdFrete])
+
+class RankingAeroportos(Base):
+    __tablename__ = 'Tb_PLN_RankingAeroportos'
+    __table_args__ = {'schema': 'intec.dbo'}
+    Id = Column(Integer, primary_key=True, autoincrement=True)
+    Uf = Column(String(2), nullable=False)  # A Sigla (SP, RJ, etc.)
+    IdAeroporto = Column(Integer, ForeignKey('intec.dbo.Tb_PLN_Aeroporto.Id'), nullable=False) # Ajuste se o nome real da tabela for diferente
+    IndiceImportancia = Column(Integer, default=0) # 0 a 100
+    
+    # Relacionamentos
+    # Pegar na tabela de Aeroporto para mostrar o nome completo, cidade, etc.
+    Aeroporto = relationship("Aeroporto", backref="rankings")

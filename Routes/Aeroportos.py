@@ -99,3 +99,24 @@ def Excluir(id_remessa):
     if Sucesso: flash(Mensagem, 'info')
     else: flash(Mensagem, 'danger')
     return redirect(url_for('Aeroporto.Gerenciar'))
+
+@AeroportoBp.route('/Ranking')
+@login_required
+@RequerPermissao('cadastros.aeroportos.visualizar') # Ajuste a permissão conforme necessário
+def RankingIndex():
+    Dados = AeroportoService.ListarAeroportosPorEstado()
+    return render_template('Aeroportos/Ranking.html', Dados=Dados)
+
+@AeroportoBp.route('/API/SalvarRanking', methods=['POST'])
+@login_required
+@RequerPermissao('cadastros.aeroportos.editar')
+def SalvarRanking():
+    try:
+        data = request.json
+        uf = data.get('uf')
+        aeroportos = data.get('aeroportos') # Lista de objs
+        
+        sucesso, msg = AeroportoService.SalvarRankingUf(uf, aeroportos)
+        return jsonify({'sucesso': sucesso, 'msg': msg})
+    except Exception as e:
+        return jsonify({'sucesso': False, 'msg': str(e)}), 500  
