@@ -7,7 +7,9 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-rotatedmarker/0.2.0/leaflet.rotatedMarker.min.js"></script> 
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
 <link rel="stylesheet" href="{{ url_for('static', filename='CSS/Planejamento/Editor.css') }}">
 
 <div class="map-wrapper">
@@ -39,7 +41,7 @@
             </h2>
             <div class="route-subtitle">
                 <span>{{ Ctc.filial }}-{{ Ctc.serie }}-{{ Ctc.ctc }}</span> • 
-                <span>{{ Ctc.peso|float|round(2) }} kg</span> • 
+                <span>Fís: {{ Ctc.peso_fisico|float|round(2) }} | Tax: <strong>{{ Ctc.peso_taxado|float|round(2) }} kg</strong></span> • 
                 <span>R$ {{ "{:,.2f}".format(Ctc.valor) }}</span>
             </div>
         </div>
@@ -66,7 +68,7 @@
         </div>
 
         <div class="timeline-container" id="timeline-content">
-            <div class="loading-state" style="text-align:center; padding: 40px; color: #666;">
+            <div class="loading-state" style="text-align:center; padding: 40px; color: var(--cor-texto-secundario);">
                 <i class="ph-bold ph-spinner ph-spin" style="font-size: 2rem;"></i> 
                 <p>Calculando melhores rotas...</p>
             </div>
@@ -126,6 +128,7 @@
 {% endif %}
 
 <script>
+    // Dados injetados pelo Backend
     window.opcoesRotas = {{ OpcoesRotas | tojson | safe }};
     window.ctc = {{ Ctc | tojson | safe }};
     window.origemCoords = { lat: {{ Origem.lat | default(0) }}, lon: {{ Origem.lon | default(0) }} };

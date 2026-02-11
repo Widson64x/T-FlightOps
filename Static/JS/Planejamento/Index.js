@@ -54,7 +54,8 @@ async function BuscarDados() {
             d.busca_texto = `${d.ctc} ${d.remetente} ${d.destinatario} ${d.origem} ${d.destino} ${d.filial} ${d.tipo_carga} ${d.motivodoc} ${d.prioridade}`.toLowerCase();
             
             // Tratamento de valores numéricos
-            d.peso_taxado = Number(d.peso_taxado || 0);
+            d.peso_fisico = Number(d.peso_fisico || 0);
+            d.peso_taxado = Number(d.peso_taxado || 0); // Mantém para ordenação principal
             d.raw_val_mercadoria = Number(d.raw_val_mercadoria || 0);
             d.volumes = Number(d.volumes || 0);
             d.qtd_notas = Number(d.qtd_notas || 0);
@@ -179,7 +180,10 @@ function Renderizar() {
             </td>
             <td style="text-align: center;">${row.qtd_notas}</td>
             <td style="text-align: right;">${row.volumes}</td>
-            <td style="text-align: right;">${fmtNumero.format(row.peso_taxado)}</td>
+            <td style="text-align: right; line-height: 1.2;">
+                <div style="font-size: 0.8em; color: #64748b;">${fmtNumero.format(row.peso_fisico)}</div>
+                <div style="font-weight: bold; color: #0f172a;">${fmtNumero.format(row.peso_taxado)} Tax</div>
+            </td>
             <td style="text-align: right; color: var(--text-secondary);">${fmtMoeda.format(row.raw_val_mercadoria)}</td>
         `;
         fragment.appendChild(tr);

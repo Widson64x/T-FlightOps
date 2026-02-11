@@ -27,7 +27,8 @@ class PlanejamentoService:
             ,c.data as DataEmissao
             ,c.hora as HoraEmissao
             ,c.volumes as Volumes
-            ,c.pesotax as Peso
+            ,c.peso as PesoFisico
+            ,c.pesotax as PesoTaxado
             ,c.valmerc as Valor
             ,c.fretetotalbruto as FreteTotal
             ,upper(c.remet_nome) as Remetente
@@ -68,15 +69,15 @@ class PlanejamentoService:
             and (m.cancelado is null OR m.cancelado = 'S')
             and (m.motivo NOT in ('TRA','RED') OR m.motivo IS NULL)
             
-            -- LÓGICA DE MODAL E OCORRÊNCIA TM (ATUALIZADO)
+            -- LÓGICA DE MODAL E OCORRÊNCIA TM
             AND (
-                -- CASO 1: É AÉREO NATIVO E NÃO TEM TM (Continua Aéreo)
+                -- CASO 1: É AÉREO NATIVO E NÃO TEM TM
                 (c.modal LIKE 'AEREO%' AND NOT EXISTS (
                     SELECT 1 FROM intec.dbo.tb_ocorr cr (nolock) 
                     WHERE cr.cod_ocorr = 'TM' AND cr.filialctc = c.filialctc
                 ))
                 OR
-                -- CASO 2: NÃO É AÉREO (Ex: RODO) MAS TEM TM (Virou Aéreo)
+                -- CASO 2: NÃO É AÉREO MAS TEM TM
                 (c.modal NOT LIKE 'AEREO%' AND EXISTS (
                     SELECT 1 FROM intec.dbo.tb_ocorr cr (nolock) 
                     WHERE cr.cod_ocorr = 'TM' AND cr.filialctc = c.filialctc
@@ -154,7 +155,8 @@ class PlanejamentoService:
                 'remetente': to_str(row.Remetente),
                 'destinatario': to_str(row.Destinatario),
                 'volumes': to_int(row.Volumes),
-                'peso_taxado': to_float(row.Peso),
+                'peso_fisico': to_float(row.PesoFisico), # Novo campo para display
+                'peso_taxado': to_float(row.PesoTaxado), # Campo MESTRE para cálculo
                 'val_mercadoria': fmt_moeda(row.Valor),
                 'raw_val_mercadoria': to_float(row.Valor),
                 'raw_frete_total': to_float(row.FreteTotal),
@@ -180,16 +182,19 @@ class PlanejamentoService:
         Sessao = ObterSessaoSqlServer()
         try:
             if not mapa_cache: mapa_cache = PlanejamentoService._ObterMapaCache()
-            Hoje = date.today()
+            
+            # --- ALTERAÇÃO AQUI: Pegando a data de ontem ---
+            Hoje = date.today() #- timedelta(days=1)
             
             # Filtro Específico
+            # Alterado de >= para = para pegar apenas o dia de ontem
             FiltroSQL = """
                 AND c.motivodoc IN ('REE', 'ENT', 'NOR') 
-                AND c.data >= :data_hoje
+                AND c.data = :data_alvo
             """
             
             Query = text(PlanejamentoService._QueryBase + FiltroSQL + " ORDER BY c.data DESC, c.hora DESC")
-            Rows = Sessao.execute(Query, {'data_hoje': Hoje}).fetchall()
+            Rows = Sessao.execute(Query, {'data_alvo': Hoje}).fetchall()
             
             return PlanejamentoService._SerializarResultados(Rows, "DIARIO", mapa_cache)
         except Exception as e:
@@ -345,7 +350,9 @@ class PlanejamentoService:
                 'origem_uf': str(CtcEncontrado.uf_orig).strip(),
                 'destino_cidade': str(CtcEncontrado.cidade_dest).strip(),
                 'destino_uf': str(CtcEncontrado.uf_dest).strip(),
-                'peso': float(CtcEncontrado.peso or 0),
+                
+                'peso_fisico': float(CtcEncontrado.peso or 0),
+                'peso_taxado': float(CtcEncontrado.pesotax or 0), # Prioridade Aérea
                 'volumes': int(CtcEncontrado.volumes or 0),
                 'valor': (CtcEncontrado.valmerc or 0),
                 'remetente': str(CtcEncontrado.remet_nome).strip(),
@@ -366,7 +373,6 @@ class PlanejamentoService:
         """
         Sessao = ObterSessaoSqlServer()
         try:
-            # ... (Mantenha a lógica de filtros e query existente até o loop for) ...
             LogService.Debug("PlanejamentoService", f"Busca consolidação (Inc. TM). Rota: {cidade_origem} -> {cidade_destino}")
 
             if isinstance(data_base, datetime): data_base = data_base.date()
@@ -419,6 +425,7 @@ class PlanejamentoService:
                     'ctc': to_str(c.filialctc),
                     'serie': to_str(c.seriectc),
                     'volumes': to_int(c.volumes),
+                    'peso_fisico': to_float(c.peso),
                     'peso_taxado': to_float(c.pesotax),
                     'val_mercadoria': to_float(c.valmerc),
                     'remetente': to_str(c.remet_nome),
@@ -463,7 +470,8 @@ class PlanejamentoService:
                 'serie': ctc_principal['serie'],
                 'ctc': ctc_principal['ctc'],
                 'volumes': int(ctc_principal['volumes']),
-                'peso': float(ctc_principal['peso']),
+                'peso_fisico': float(ctc_principal['peso_fisico']),
+                'peso_taxado': float(ctc_principal['peso_taxado']),
                 'valor': float(ctc_principal['valor']),
                 'remetente': ctc_principal['remetente'],
                 'destinatario': ctc_principal['destinatario'],
@@ -477,7 +485,8 @@ class PlanejamentoService:
             }]
             
             total_volumes = docs[0]['volumes']
-            total_peso = docs[0]['peso']
+            total_peso_fisico = docs[0]['peso_fisico']
+            total_peso_taxado = docs[0]['peso_taxado']
             total_valor = docs[0]['valor']
 
             for c in lista_candidatos:
@@ -486,7 +495,8 @@ class PlanejamentoService:
                     'serie': c['serie'],
                     'ctc': c['ctc'],
                     'volumes': int(c['volumes']),
-                    'peso': float(c['peso_taxado']),
+                    'peso_fisico': float(c['peso_fisico']),
+                    'peso_taxado': float(c['peso_taxado']),
                     'valor': float(c['val_mercadoria']),
                     'remetente': c['remetente'],
                     'destinatario': c['destinatario'],
@@ -500,11 +510,13 @@ class PlanejamentoService:
                 }
                 docs.append(c_doc)
                 total_volumes += c_doc['volumes']
-                total_peso += c_doc['peso']
+                total_peso_fisico += c_doc['peso_fisico']
+                total_peso_taxado += c_doc['peso_taxado']
                 total_valor += c_doc['valor']
 
             unificado['volumes'] = total_volumes
-            unificado['peso'] = total_peso
+            unificado['peso_fisico'] = total_peso_fisico
+            unificado['peso_taxado'] = total_peso_taxado # Esse irá para o MalhaService
             unificado['valor'] = total_valor
             
             unificado['is_consolidado'] = True

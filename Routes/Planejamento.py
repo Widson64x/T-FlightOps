@@ -5,7 +5,7 @@ from datetime import timedelta, datetime, date
 # Import dos Serviços
 from Services.PermissaoService import RequerPermissao
 from Services.PlanejamentoService import PlanejamentoService
-from Services.Shared.GeoService import BuscarCoordenadasCidade, BuscarAeroportoMaisProximo
+from Services.Shared.GeoService import BuscarCoordenadasCidade, BuscarAeroportoMaisProximo, BuscarTopAeroportos
 from Services.MalhaService import MalhaService
 from Services.LogService import LogService  # <--- Import Adicionado
 
@@ -50,55 +50,54 @@ def ApiCtcsHoje():
 def MontarPlanejamento(filial, serie, ctc):
     LogService.Info("Routes.Planejamento", f"Iniciando Montagem Planejamento: {filial}-{serie}-{ctc}")
     
-    # 1. Busca Dados do CTC Principal
+    # 1. Busca Dados do CTC (Mantido)
     DadosCtc = PlanejamentoService.ObterCtcDetalhado(filial, serie, ctc)
-    if not DadosCtc: 
-        LogService.Error("Routes.Planejamento", f"Erro ao montar: CTC Base não encontrado {filial}-{serie}-{ctc}")
-        return "Não encontrado", 404
+    if not DadosCtc: return "Não encontrado", 404
 
-    # 2. Geografia
+    # 2. Geografia (Mantido)
     CoordOrigem = BuscarCoordenadasCidade(DadosCtc['origem_cidade'], DadosCtc['origem_uf'])
     CoordDestino = BuscarCoordenadasCidade(DadosCtc['destino_cidade'], DadosCtc['destino_uf'])
     
-    # 3. Consolidação (Agora suporta TM via SQL atualizado no Service)
+    # 3. Consolidação (Mantido)
     CtcsCandidatos = PlanejamentoService.BuscarCtcsConsolidaveis(
-        DadosCtc['origem_cidade'], 
-        DadosCtc['origem_uf'],
-        DadosCtc['destino_cidade'], 
-        DadosCtc['destino_uf'],
-        DadosCtc['data_emissao_real'],
-        filial,
-        ctc,
-        DadosCtc['tipo_carga']
+        DadosCtc['origem_cidade'], DadosCtc['origem_uf'],
+        DadosCtc['destino_cidade'], DadosCtc['destino_uf'],
+        DadosCtc['data_emissao_real'], filial, ctc, DadosCtc['tipo_carga']
     )
-    
-    # Unifica
     DadosUnificados = PlanejamentoService.UnificarConsolidacao(DadosCtc, CtcsCandidatos)
 
-    # 4. Aeroportos
-    AeroOrigem = BuscarAeroportoMaisProximo(CoordOrigem['lat'], CoordOrigem['lon']) if CoordOrigem else None
-    AeroDestino = BuscarAeroportoMaisProximo(CoordDestino['lat'], CoordDestino['lon']) if CoordDestino else None
+    # 4. Aeroportos (ATUALIZADO PARA MÚLTIPLOS)
+    # Busca os 2 melhores aeroportos num raio aceitável
+    ListaOrigem = BuscarTopAeroportos(CoordOrigem['lat'], CoordOrigem['lon'], limite=2)
+    ListaDestino = BuscarTopAeroportos(CoordDestino['lat'], CoordDestino['lon'], limite=2)
+    
+    # Extrai apenas os códigos IATA para passar ao MalhaService
+    IatasOrigem = [a['iata'] for a in ListaOrigem]
+    IatasDestino = [a['iata'] for a in ListaDestino]
 
-    # 5. Busca de Rotas Inteligentes (Categorizadas)
+    # Para a interface, vamos manter o principal como referência visual inicial (opcional)
+    AeroOrigemPrincipal = ListaOrigem[0] if ListaOrigem else None
+    AeroDestinoPrincipal = ListaDestino[0] if ListaDestino else None
+
+    # 5. Busca de Rotas Inteligentes (Passando Listas)
     OpcoesRotas = {}
-    if AeroOrigem and AeroDestino:
+    if IatasOrigem and IatasDestino:
         DataInicioBusca = DadosUnificados['data_busca'] 
-        
-        # Passamos o peso unificado para cálculo de custo
-        PesoTotal = float(DadosUnificados.get('peso', 10.0))
-        
-        # Busca com janela de 5 dias para ter mais opções
+        PesoTotal = float(DadosUnificados.get('peso_taxado', 0.0))
+        if PesoTotal <= 0: PesoTotal = float(DadosUnificados.get('peso_fisico', 10.0)) # Fallback seguro
         DataLimite = DataInicioBusca + timedelta(days=5) 
         
+        # Passa as listas de IATA
         OpcoesRotas = MalhaService.BuscarOpcoesDeRotas(
-            DataInicioBusca, DataLimite, AeroOrigem['iata'], AeroDestino['iata'], PesoTotal
+            DataInicioBusca, DataLimite, IatasOrigem, IatasDestino, PesoTotal
         )
 
     return render_template('Planejamento/Editor.html', 
                            Ctc=DadosUnificados, 
                            Origem=CoordOrigem, Destino=CoordDestino,
-                           AeroOrigem=AeroOrigem, AeroDestino=AeroDestino,
-                           OpcoesRotas=OpcoesRotas) # Passa o dicionário completo de opções
+                           AeroOrigem=AeroOrigemPrincipal, # Apenas para referência se precisar
+                           AeroDestino=AeroDestinoPrincipal,
+                           OpcoesRotas=OpcoesRotas)
 
 @PlanejamentoBp.route('/API/Salvar', methods=['POST'])
 @login_required

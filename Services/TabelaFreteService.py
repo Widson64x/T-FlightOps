@@ -35,6 +35,26 @@ class TabelaFreteService:
             return None
 
     @staticmethod
+    def _NormalizarNomeCia(cia_input):
+        """
+        Converte códigos IATA/ICAO ou nomes longos para o padrão da Tabela de Frete.
+        Padrão esperado no Banco: GOL, LATAM, AZUL.
+        """
+        if not cia_input: return ""
+        s = str(cia_input).upper().strip()
+        
+        # Mapeamento GOL
+        if 'GOL' in s or 'G3' in s or 'GLO' in s: return 'GOL'
+        
+        # Mapeamento LATAM
+        if 'LATAM' in s or 'TAM' in s or 'JJ' in s or 'LA' in s: return 'LATAM'
+        
+        # Mapeamento AZUL
+        if 'AZUL' in s or 'AD' in s or 'AZU' in s: return 'AZUL'
+        
+        return s
+
+    @staticmethod
     def ListarRemessas():
         Sessao = ObterSessaoSqlServer()
         try:
@@ -71,7 +91,6 @@ class TabelaFreteService:
             DfRaw = None
             
             # --- BLOCO DE LEITURA BLINDADO (Context Manager) ---
-            # O 'with' garante que o arquivo será fechado ao sair do bloco
             with pd.ExcelFile(Caminho, engine='openpyxl') as XlsFile:
                 
                 # 1. Identificar a aba correta
@@ -87,10 +106,8 @@ class TabelaFreteService:
                 else:
                     LogService.Info("TabelaFreteService", f"Processando aba: {SheetName}")
 
-                # 2. Ler os dados usando o arquivo já aberto
+                # 2. Ler os dados
                 DfRaw = pd.read_excel(XlsFile, sheet_name=SheetName, header=None)
-
-            # --- FIM DO BLOCO DE LEITURA (Arquivo fechado aqui) ---
 
             # 3. Localizar Cabeçalho
             RowHeaderIdx = -1
@@ -155,13 +172,15 @@ class TabelaFreteService:
                         ValorRaw = Row[ColIdx]
                         ValorTarifa = TabelaFreteService._NormalizarTarifa(ValorRaw)
                         
-                        Cia = NomeServico.split(' ')[0].upper()
-                        
+                        # Normaliza Cia aqui também para garantir consistência
+                        CiaBruta = NomeServico.split(' ')[0].upper()
+                        CiaNormalizada = TabelaFreteService._NormalizarNomeCia(CiaBruta)
+
                         Item = TabelaFrete(
                             IdRemessa=NovaRemessa.Id,
                             Origem=Origem,
                             Destino=RawDestino,
-                            CiaAerea=Cia,
+                            CiaAerea=CiaNormalizada, # Salva já normalizado (GOL, LATAM)
                             Servico=NomeServico,
                             Tarifa=ValorTarifa
                         )
@@ -182,12 +201,9 @@ class TabelaFreteService:
             return False, f"Erro técnico: {str(e)}"
         
         finally:
-            # Agora é seguro remover, pois o 'with' já fechou o arquivo lá em cima
             if os.path.exists(Caminho):
-                try:
-                    os.remove(Caminho)
-                except Exception as e:
-                    LogService.Warning("TabelaFreteService", f"Não foi possível remover temp: {e}")
+                try: os.remove(Caminho)
+                except: pass
             Sessao.close()
             
     @staticmethod
@@ -195,36 +211,40 @@ class TabelaFreteService:
         """
         Busca a tarifa na tabela e calcula o custo total.
         Retorna (CustoTotal, Detalhes).
-        Detalhes é um dicionário com 'tarifa_base', 'servico', 'cia_tarifaria', etc.
         """
         Sessao = ObterSessaoSqlServer()
         try:
-            # Tenta buscar tarifa específica
-            # Join com RemessaFrete para garantir que a tabela está ativa
+            # 1. Normaliza o nome da Cia para bater com o banco (ex: G3 -> GOL)
+            cia_buscada = TabelaFreteService._NormalizarNomeCia(cia)
+
+            # 2. Busca Tarifa (Ordenando pela MENOR tarifa para pegar o melhor preço)
+            # Usa .join(RemessaFrete) para garantir que só pega de tabelas ativas
             Item = Sessao.query(TabelaFrete).join(RemessaFrete).filter(
                 RemessaFrete.Ativo == True,
                 TabelaFrete.Origem == origem,
                 TabelaFrete.Destino == destino,
-                TabelaFrete.CiaAerea == cia
-            ).first()
+                TabelaFrete.CiaAerea == cia_buscada
+            ).order_by(TabelaFrete.Tarifa.asc()).first() # <--- O PULO DO GATO: Pega a mais barata
 
             if Item and Item.Tarifa:
                 vl_tarifa = float(Item.Tarifa)
                 vl_peso = float(peso)
                 Custo = vl_tarifa * vl_peso
                 
-                # --- AQUI ESTÁ A MUDANÇA ---
-                # Montamos o objeto completo para o frontend
                 Detalhes = {
                     'tarifa_base': vl_tarifa,
-                    'servico': Item.Servico,       # Coluna Servico da tabela
-                    'cia_tarifaria': Item.CiaAerea, # Coluna CiaAerea da tabela
+                    'servico': Item.Servico,
+                    'cia_tarifaria': Item.CiaAerea,
                     'peso_calculado': vl_peso
                 }
                 
+                # Debug para confirmar no terminal
+                LogService.Debug("TarifaFound", f"{origem}->{destino} ({cia_buscada}): R$ {vl_tarifa} [{Item.Servico}]")
+                
                 return Custo, Detalhes
             
-            # Se não achar, retorna 0 e dicionário vazio
+            # Se não achar
+            LogService.Debug("TarifaMiss", f"Nenhuma tarifa ativa para {origem}->{destino} ({cia_buscada})")
             return 0.0, {}
 
         except Exception as e:

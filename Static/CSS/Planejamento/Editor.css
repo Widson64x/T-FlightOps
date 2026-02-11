@@ -1,435 +1,387 @@
-/* --- VARIÁVEIS E ANIMAÇÕES GLOBAIS --- */
+/* --- VARIÁVEIS LOCAIS (Baseadas no Temas.css) --- */
 :root {
-    --glass-bg: rgba(255, 255, 255, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.4);
-    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-    --primary-gradient: linear-gradient(135deg, #004aad 0%, #0078d7 100%);
-    --card-hover-transform: translateY(-4px) scale(1.01);
+    --sidebar-width: 420px;
+    --glass-bg-light: rgba(255, 255, 255, 0.85);
+    --glass-bg-dark: rgba(30, 41, 59, 0.85);
+    --glass-blur: 20px;
+    
+    /* Variáveis de apoio */
     --transition-speed: 0.3s;
 }
 
-[data-theme="dark"] :root {
-    --glass-bg: rgba(20, 20, 25, 0.75);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-}
-
-/* Animações Keyframes */
-@keyframes slideInLeft {
-    from { opacity: 0; transform: translateX(-50px); }
-    to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes floatPlane {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-3px) rotate(2deg); }
-}
-
-@keyframes pulseGlow {
-    0% { box-shadow: 0 0 0 0 rgba(0, 74, 173, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(0, 74, 173, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(0, 74, 173, 0); }
-}
-
-@keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-}
-
-/* --- LAYOUT PRINCIPAL --- */
-.conteudo-pagina {
-    padding: 0 !important;
-    overflow: hidden !important;
-    height: 100vh !important;
-    display: flex;
-    flex-direction: column;
-}
-
+/* Ajuste do Mapa */
 .map-wrapper {
     position: relative;
-    flex: 1;
     width: 100%;
-    height: 100%;
-    background: var(--cor-fundo-principal);
+    height: 100vh;
     overflow: hidden;
+    background: var(--cor-fundo-principal);
+    z-index: 1;
 }
 
-#map { width: 100%; height: 100%; z-index: 1; }
+#map { 
+    width: 100%; 
+    height: 100%; 
+    z-index: 1;
+}
 
-/* Inversão inteligente do mapa no modo dark */
+/* Modo Dark no Mapa (Inversão Inteligente) */
 [data-theme="dark"] .leaflet-layer {
-    filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+    filter: invert(100%) hue-rotate(180deg) brightness(85%) contrast(90%);
 }
 
-/* --- SIDEBAR DE VIDRO (THE COCKPIT) --- */
+/* --- SIDEBAR DE VIDRO (The Cockpit) --- */
 .glass-sidebar {
     position: absolute;
     top: 20px;
     left: 20px;
     bottom: 20px;
-    width: 420px;
+    width: var(--sidebar-width);
     
-    /* O Efeito Glassmorphism Real */
-    background: var(--glass-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--glass-border);
-    border-radius: 20px;
-    box-shadow: var(--glass-shadow);
+    /* Glass Effect Dinâmico */
+    background: var(--glass-bg-light);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    
+    border: 1px solid var(--cor-borda);
+    border-radius: 16px;
+    box-shadow: var(--sombra-card);
     
     display: flex;
     flex-direction: column;
     z-index: 1000;
     overflow: hidden;
-    
-    /* Animação de Entrada */
-    animation: slideInLeft 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: background 0.3s, border 0.3s;
 }
 
-/* 1. HEADER DA CARGA */
+[data-theme="dark"] .glass-sidebar {
+    background: var(--glass-bg-dark);
+}
+
+/* 1. HEADER */
 .sidebar-header-editor {
-    padding: 25px 25px 15px 25px;
-    border-bottom: 1px solid rgba(160, 160, 160, 0.1);
-    background: linear-gradient(to bottom, rgba(255,255,255,0.1), transparent);
+    padding: 24px;
+    border-bottom: 1px solid var(--cor-borda);
+    background: linear-gradient(to bottom, rgba(var(--cor-primaria-rgb), 0.05), transparent);
 }
 
 .header-top {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     margin-bottom: 12px;
 }
 
 .badge-serie {
     font-size: 0.75rem;
     font-weight: 700;
-    padding: 5px 10px;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.05);
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--cor-fundo-principal);
     color: var(--cor-texto-principal);
+    border: 1px solid var(--cor-borda);
     display: flex;
     align-items: center;
     gap: 6px;
-    border: 1px solid rgba(0,0,0,0.05);
 }
-[data-theme="dark"] .badge-serie { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.1); }
 
 .badge-serie.is-lote {
-    background: rgba(var(--cor-primaria-rgb), 0.1);
-    color: var(--cor-primaria);
-    border-color: rgba(var(--cor-primaria-rgb), 0.2);
+    background: rgba(var(--cor-info-rgb), 0.1);
+    color: var(--cor-info);
+    border-color: rgba(var(--cor-info-rgb), 0.2);
 }
 
 .badge-prioridade {
     font-size: 0.7rem;
     font-weight: 800;
-    padding: 5px 10px;
+    padding: 4px 10px;
     border-radius: 20px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
-.badge-prioridade.normal { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
-.badge-prioridade.urgente { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; animation: pulseGlow 2s infinite; }
+.badge-prioridade.normal { background: rgba(var(--cor-sucesso-rgb), 0.15); color: var(--cor-sucesso); }
+.badge-prioridade.urgente { background: rgba(var(--cor-erro-rgb), 0.15); color: var(--cor-erro); animation: pulseAlert 2s infinite; }
 
 .route-title {
     margin: 0;
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     font-weight: 800;
     color: var(--cor-texto-principal);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
 }
-.route-title i { color: var(--cor-primaria); animation: floatPlane 3s ease-in-out infinite; }
+.route-title i { color: var(--cor-primaria); }
 
 .route-subtitle {
+    margin-top: 8px;
     font-size: 0.9rem;
     color: var(--cor-texto-secundario);
-    margin-top: 6px;
     font-weight: 500;
 }
 
-/* 2. ABAS DE ESTRATÉGIA */
+/* 2. TABS ESTRATÉGIA */
 .strategy-tabs {
     display: flex;
-    padding: 15px 15px 0 15px;
-    gap: 8px;
-    background: rgba(0,0,0,0.02);
+    padding: 16px 16px 0 16px;
+    gap: 6px;
+    border-bottom: 1px solid var(--cor-borda);
 }
 
 .tab-btn {
     flex: 1;
-    border: none;
     background: transparent;
-    padding: 12px 5px;
+    border: none;
+    padding: 10px 4px;
     font-size: 0.8rem;
     color: var(--cor-texto-secundario);
     cursor: pointer;
-    border-radius: 12px 12px 0 0;
+    border-radius: 8px 8px 0 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
+    gap: 5px;
     position: relative;
-    overflow: hidden;
+    transition: all 0.2s;
 }
-
-.tab-btn i { font-size: 1.4rem; transition: transform 0.2s; }
-.tab-btn span { font-weight: 600; }
 
 .tab-btn:hover {
+    color: var(--cor-primaria);
     background: rgba(var(--cor-primaria-rgb), 0.05);
-    color: var(--cor-texto-principal);
 }
-.tab-btn:hover i { transform: scale(1.2); }
 
 .tab-btn.active {
     color: var(--cor-primaria);
-    background: linear-gradient(to top, rgba(var(--cor-primaria-rgb), 0.1), transparent);
-    border-bottom: 3px solid var(--cor-primaria);
+    font-weight: 700;
+}
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 0; width: 100%;
+    height: 3px;
+    background: var(--cor-primaria);
+    border-radius: 3px 3px 0 0;
 }
 
-/* 3. MÉTRICAS (PAINEL) */
+/* 3. MÉTRICAS */
 .strategy-summary {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     padding: 20px;
-    background: rgba(255,255,255,0.4);
-    border-bottom: 1px solid rgba(0,0,0,0.05);
-    backdrop-filter: blur(5px);
+    background: rgba(var(--cor-primaria-rgb), 0.03);
+    border-bottom: 1px solid var(--cor-borda);
 }
-[data-theme="dark"] .strategy-summary { background: rgba(0,0,0,0.2); }
 
 .metric-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    position: relative;
+    text-align: center;
+    border-right: 1px solid var(--cor-borda);
 }
-
-.metric-item:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    top: 10%;
-    height: 80%;
-    width: 1px;
-    background: rgba(0,0,0,0.1);
-}
+.metric-item:last-child { border-right: none; }
 
 .metric-item .lbl { 
     font-size: 0.7rem; 
     text-transform: uppercase; 
     color: var(--cor-texto-secundario); 
-    font-weight: 600;
-    letter-spacing: 1px;
+    font-weight: 700;
+    display: block;
     margin-bottom: 4px;
 }
-
 .metric-item .val { 
     font-size: 1.1rem; 
     font-weight: 800; 
     color: var(--cor-texto-principal); 
 }
 
-/* 4. TIMELINE (A LISTA DE VOOS) */
+/* 4. TIMELINE */
 .timeline-container {
     flex: 1;
     overflow-y: auto;
     padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    
-    /* Scrollbar Estilizada e Fina */
-    scrollbar-width: thin;
-    scrollbar-color: rgba(0,0,0,0.2) transparent;
+    gap: 16px;
 }
-.timeline-container::-webkit-scrollbar { width: 6px; }
-.timeline-container::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 10px; }
 
-/* CARD DE VOO (O "Ticket") */
 .flight-card {
-    background: var(--cor-fundo-secundario);
-    border-radius: 16px;
+    background: var(--cor-fundo-painel);
+    border: 1px solid var(--cor-borda);
+    border-radius: 12px;
     padding: 16px;
-    border: 1px solid rgba(0,0,0,0.05);
+    box-shadow: var(--sombra-suave);
     position: relative;
-    transition: all var(--transition-speed) ease;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-    animation: fadeIn 0.4s ease-out forwards;
+    transition: transform 0.2s;
 }
 
 .flight-card:hover {
-    transform: var(--card-hover-transform);
-    box-shadow: 0 10px 15px rgba(0,0,0,0.05);
-    border-color: rgba(var(--cor-primaria-rgb), 0.3);
+    transform: translateY(-2px);
+    border-color: var(--cor-primaria);
 }
 
-/* Decorativo lateral do card (fita colorida) */
+/* Indicador lateral colorido */
 .flight-card::before {
     content: '';
     position: absolute;
-    left: 0; top: 15px; bottom: 15px;
+    left: 0; top: 12px; bottom: 12px;
     width: 4px;
     background: var(--cor-primaria);
     border-radius: 0 4px 4px 0;
-    opacity: 0.5;
 }
 
 .flight-header {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px dashed rgba(0,0,0,0.1);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--cor-borda);
 }
 
 .cia-logo-box {
-    width: 32px; height: 32px;
-    background: white;
+    width: 28px; height: 28px;
     border-radius: 50%;
+    background: #fff;
+    padding: 2px;
+    border: 1px solid var(--cor-borda);
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    padding: 4px;
 }
 .cia-logo { width: 100%; height: 100%; object-fit: contain; }
 
-.cia-name { font-weight: 700; font-size: 0.9rem; color: var(--cor-texto-principal); }
-.flight-date { margin-left: auto; font-size: 0.75rem; color: var(--cor-texto-secundario); background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 4px; }
+.cia-name { font-weight: 700; font-size: 0.85rem; color: var(--cor-texto-principal); }
+.flight-date { margin-left: auto; font-size: 0.75rem; color: var(--cor-texto-secundario); background: var(--cor-fundo-principal); padding: 2px 6px; border-radius: 4px; }
 
-/* Rota interna do card */
 .flight-route {
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
+.airport-code { font-size: 1.25rem; font-weight: 800; color: var(--cor-texto-principal); }
+.flight-time { font-size: 0.8rem; color: var(--cor-texto-secundario); font-weight: 500; }
+.flight-arrow-anim i { color: var(--cor-primaria); font-size: 1.2rem; }
 
-.airport-block { text-align: center; min-width: 60px; }
-.airport-code { font-size: 1.4rem; font-weight: 900; color: var(--cor-texto-principal); line-height: 1; }
-.flight-time { font-size: 0.85rem; color: var(--cor-texto-secundario); margin-top: 4px; font-weight: 500; }
-
-.flight-arrow-anim {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--cor-primaria);
-    font-size: 1.2rem;
-    position: relative;
-    height: 100%;
-}
-.flight-arrow-anim i { animation: floatPlane 2s ease-in-out infinite; }
-.flight-arrow-anim::after {
-    content: '';
-    position: absolute;
-    width: 80%;
-    height: 1px;
-    background: rgba(var(--cor-primaria-rgb), 0.3);
-    z-index: -1;
-}
-
-/* Linha de Conexão */
-.connection-line {
-    text-align: center;
-    font-size: 0.75rem;
-    color: #f59e0b;
-    padding: 8px;
-    margin-left: 20px;
-    border-left: 2px dashed #f59e0b;
-    position: relative;
-    font-weight: 700;
-}
-.connection-line::before {
-    content: '';
-    position: absolute;
-    left: -5px; top: 50%;
-    width: 8px; height: 8px;
-    background: #f59e0b;
-    border-radius: 50%;
-    transform: translateY(-50%);
-}
-
-/* 5. FOOTER (AÇÕES) */
+/* 5. FOOTER */
 .sidebar-footer {
     padding: 20px;
-    background: rgba(255,255,255,0.6);
+    border-top: 1px solid var(--cor-borda);
+    background: var(--glass-bg-light);
     backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(0,0,0,0.05);
     display: flex;
-    gap: 15px;
+    gap: 12px;
 }
-[data-theme="dark"] .sidebar-footer { background: rgba(30,30,30,0.6); }
+[data-theme="dark"] .sidebar-footer { background: var(--glass-bg-dark); }
 
 .btn-confirm {
     flex: 1;
-    padding: 14px;
+    padding: 12px;
     border: none;
-    border-radius: 12px;
-    background: var(--primary-gradient);
-    background-size: 200% 100%;
-    color: white;
+    border-radius: 10px;
+    background: var(--cor-primaria);
+    color: #fff;
     font-weight: 700;
-    font-size: 1rem;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    box-shadow: 0 4px 12px rgba(0, 74, 173, 0.3);
-    transition: all 0.3s ease;
-    
-    /* Efeito de brilho passando */
-    animation: shimmer 5s infinite linear;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background 0.2s;
 }
-
-.btn-confirm:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 74, 173, 0.4);
-    filter: brightness(1.1);
-}
-
-.btn-confirm:disabled {
-    background: #ccc;
-    box-shadow: none;
-    cursor: not-allowed;
-    animation: none;
-}
+.btn-confirm:hover { background: var(--cor-primaria-hover); }
+.btn-confirm:disabled { background: var(--cor-texto-secundario); cursor: not-allowed; }
 
 .btn-cancel {
-    padding: 14px 20px;
-    border: 1px solid rgba(0,0,0,0.1);
-    border-radius: 12px;
-    background: white;
-    color: var(--cor-texto-principal);
+    padding: 12px 20px;
+    border: 1px solid var(--cor-borda);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--cor-texto-secundario);
     text-decoration: none;
     font-weight: 600;
     transition: all 0.2s;
-    display: flex; align-items: center;
 }
-.btn-cancel:hover { background: #f8f9fa; border-color: #ccc; }
+.btn-cancel:hover { background: var(--cor-fundo-principal); color: var(--cor-texto-principal); }
 
-/* ... (Mantenha todo o CSS anterior aqui) ... */
+/* --- MAPA POPUPS & ÍCONES --- */
 
-/* --- NOVO: MODAL DE LOTE (GLASS PREMIUM) --- */
+/* Estilo do Popup do Leaflet Personalizado */
+.leaflet-popup-content-wrapper {
+    background: var(--cor-fundo-painel) !important;
+    color: var(--cor-texto-principal) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+    padding: 0 !important;
+    overflow: hidden;
+}
+.leaflet-popup-tip {
+    background: var(--cor-fundo-painel) !important;
+}
+.leaflet-popup-content {
+    margin: 0 !important;
+    line-height: 1.4;
+}
+
+/* Conteúdo interno do popup */
+.popup-flight-info {
+    width: 200px;
+}
+.popup-header {
+    background: var(--cor-fundo-principal);
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--cor-borda);
+}
+.popup-body {
+    padding: 15px;
+}
+.popup-route {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: 800;
+    font-size: 1.1rem;
+}
+.popup-meta {
+    font-size: 0.8rem;
+    color: var(--cor-texto-secundario);
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Ícone do Avião no Mapa */
+.plane-icon-marker {
+    background: transparent;
+    border: none;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+    transition: all 1s linear; /* Movimento suave */
+}
+
+@keyframes pulseAlert {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* --- CORREÇÃO DO MODAL DE LOTE --- */
 .modal-backdrop {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(4px);
     z-index: 2000;
-    display: flex;
+    
+    /* Flex para centralizar, mas oculto por padrão via classe hidden */
+    display: flex; 
     align-items: center;
     justify-content: center;
+    
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s ease;
+}
+
+/* Classe utilitária para esconder de verdade */
+.modal-backdrop.hidden {
+    display: none !important;
 }
 
 .modal-backdrop.visible {
@@ -437,89 +389,80 @@
     pointer-events: auto;
 }
 
-.glass-modal-large {
-    width: 90%;
-    max-width: 800px;
-    max-height: 80vh;
-    background: var(--glass-bg);
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
-    border: 1px solid var(--glass-border);
-    border-radius: 20px;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-    display: flex;
-    flex-direction: column;
-    transform: scale(0.9);
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+/* --- ESTILOS PARA DETALHES FINANCEIROS (Novos) --- */
+
+/* No Popup do Mapa */
+.popup-details {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--cor-borda);
+    font-size: 0.8rem;
 }
 
-.modal-backdrop.visible .glass-modal-large {
-    transform: scale(1);
-}
-
-.modal-header {
-    padding: 20px;
-    border-bottom: 1px solid rgba(0,0,0,0.1);
+.detail-row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    margin-bottom: 4px;
+}
+.detail-row strong { color: var(--cor-texto-secundario); font-weight: 600; }
+.detail-row span { color: var(--cor-texto-principal); font-weight: 700; }
+.detail-row.total { color: var(--cor-primaria); font-size: 0.9rem; margin-top: 6px; }
+
+/* No Card da Timeline */
+.flight-footer {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5px;
 }
 
-.modal-header h3 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: var(--cor-texto-principal);
+.info-badge {
+    background: rgba(0,0,0,0.03);
+    padding: 6px;
+    border-radius: 6px;
+    text-align: center;
     display: flex;
+    flex-direction: column;
+}
+
+.info-badge .label { font-size: 0.65rem; color: var(--cor-texto-secundario); text-transform: uppercase; }
+.info-badge .value { font-size: 0.8rem; font-weight: 700; color: var(--cor-texto-principal); }
+.info-badge.cost .value { color: var(--cor-primaria); }
+
+/* --- ÍCONES DE COLETA E ENTREGA (RODOVIÁRIO) --- */
+
+/* Marcador de Cidade (Caminhão/Bandeira) */
+.ground-marker {
+    background: var(--cor-fundo-painel);
+    border: 2px solid var(--cor-texto-secundario);
+    border-radius: 50%;
+    display: flex !important;
     align-items: center;
-    gap: 10px;
-}
-
-.btn-close {
-    background: transparent;
-    border: none;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    color: var(--cor-texto-secundario);
     font-size: 1.2rem;
-    color: var(--cor-texto-secundario);
-    cursor: pointer;
-    transition: color 0.2s;
-}
-.btn-close:hover { color: #dc2626; }
-
-.modal-body-scroll {
-    padding: 20px;
-    overflow-y: auto;
 }
 
-/* Tabela de Vidro */
-.glass-table {
-    width: 100%;
-    border-collapse: collapse;
+/* Coleta (Verde ou Azul Escuro) */
+.ground-marker.origin {
+    border-color: var(--cor-info);
+    color: var(--cor-info);
 }
 
-.glass-table th {
-    text-align: left;
-    padding: 12px;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    color: var(--cor-texto-secundario);
-    border-bottom: 2px solid rgba(0,0,0,0.05);
+/* Entrega (Verde Sucesso) */
+.ground-marker.dest {
+    border-color: var(--cor-sucesso);
+    color: var(--cor-sucesso);
+    background: #ecfdf5;
 }
 
-.glass-table td {
-    padding: 12px;
-    font-size: 0.9rem;
-    color: var(--cor-texto-principal);
-    border-bottom: 1px solid rgba(0,0,0,0.05);
+/* Ajuste no z-index para ícones terrestres ficarem abaixo dos aviões */
+.leaflet-marker-icon {
+    z-index: 500 !important;
 }
-
-.glass-table tr:last-child td { border-bottom: none; }
-.glass-table tr:hover td { background: rgba(0,0,0,0.02); }
-
-.glass-table tfoot td {
-    border-top: 2px solid rgba(0,0,0,0.1);
-    background: rgba(var(--cor-primaria-rgb), 0.05);
-    color: var(--cor-primaria);
+.plane-icon-marker {
+    z-index: 1000 !important; /* Avião sempre por cima */
 }
-
-.text-center { text-align: center; }
-.text-right { text-align: right; }
-.fw-bold { font-weight: 700; }
