@@ -5,9 +5,10 @@ from datetime import timedelta, datetime, date
 # Import dos Serviços
 from Services.PermissaoService import RequerPermissao
 from Services.PlanejamentoService import PlanejamentoService
-from Services.Shared.GeoService import BuscarCoordenadasCidade, BuscarAeroportoMaisProximo, BuscarTopAeroportos
+# CORREÇÃO: Importação atualizada para a nova lógica estratégica
+from Services.Shared.GeoService import BuscarCoordenadasCidade, BuscarAeroportoEstrategico, BuscarTopAeroportos
 from Services.MalhaService import MalhaService
-from Services.LogService import LogService  # <--- Import Adicionado
+from Services.LogService import LogService
 
 PlanejamentoBp = Blueprint('Planejamento', __name__)
 
@@ -67,7 +68,7 @@ def MontarPlanejamento(filial, serie, ctc):
     DadosUnificados = PlanejamentoService.UnificarConsolidacao(DadosCtc, CtcsCandidatos)
 
     # 4. Aeroportos (ATUALIZADO PARA MÚLTIPLOS)
-    # Busca os 2 melhores aeroportos num raio aceitável
+    # Busca os 2 melhores aeroportos num raio aceitável (Mantido método legado para listagem visual)
     ListaOrigem = BuscarTopAeroportos(CoordOrigem['lat'], CoordOrigem['lon'], limite=2)
     ListaDestino = BuscarTopAeroportos(CoordDestino['lat'], CoordDestino['lon'], limite=2)
     
@@ -128,8 +129,20 @@ def SalvarPlanejamento():
         # Geografia
         CoordOrigem = BuscarCoordenadasCidade(DadosCtc['origem_cidade'], DadosCtc['origem_uf'])
         CoordDestino = BuscarCoordenadasCidade(DadosCtc['destino_cidade'], DadosCtc['destino_uf'])
-        AeroOrigem = BuscarAeroportoMaisProximo(CoordOrigem['lat'], CoordOrigem['lon']) if CoordOrigem else None
-        AeroDestino = BuscarAeroportoMaisProximo(CoordDestino['lat'], CoordDestino['lon']) if CoordDestino else None
+        
+        # CORREÇÃO: Utiliza BuscarAeroportoEstrategico com a UF
+        AeroOrigem = None
+        AeroDestino = None
+
+        if CoordOrigem:
+            AeroOrigem = BuscarAeroportoEstrategico(
+                CoordOrigem['lat'], CoordOrigem['lon'], CoordOrigem['uf']
+            )
+            
+        if CoordDestino:
+            AeroDestino = BuscarAeroportoEstrategico(
+                CoordDestino['lat'], CoordDestino['lon'], CoordDestino['uf']
+            )
         
         # Grava
         Id = PlanejamentoService.RegistrarPlanejamento(

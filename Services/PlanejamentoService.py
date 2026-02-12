@@ -453,7 +453,7 @@ class PlanejamentoService:
     def UnificarConsolidacao(ctc_principal, lista_candidatos):
         """
         Gera o Lote Virtual.
-        CORREÇÃO: Propaga as cidades e UFs para os itens filhos da lista 'lista_docs'.
+        CORREÇÃO: Propaga Cidades, UFs, Data e Hora para os itens da lista 'lista_docs'.
         """
         try:
             if not lista_candidatos:
@@ -464,7 +464,7 @@ class PlanejamentoService:
 
             unificado = ctc_principal.copy()
             
-            # Garante que o item principal tenha os dados de local
+            # 1. Garante que o item PRINCIPAL tenha os dados de Data/Hora e Local na lista
             docs = [{
                 'filial': ctc_principal['filial'],
                 'serie': ctc_principal['serie'],
@@ -476,6 +476,10 @@ class PlanejamentoService:
                 'remetente': ctc_principal['remetente'],
                 'destinatario': ctc_principal['destinatario'],
                 'tipo_carga': ctc_principal['tipo_carga'],
+                
+                # Dados de Data e Hora (Originais do Principal)
+                'data_emissao_real': ctc_principal.get('data_emissao_real'),
+                'hora_formatada': ctc_principal.get('hora_formatada'),
                 
                 # Dados de Local
                 'origem_cidade': ctc_principal.get('origem_cidade'),
@@ -501,8 +505,12 @@ class PlanejamentoService:
                     'remetente': c['remetente'],
                     'destinatario': c['destinatario'],
                     'tipo_carga': c['tipo_carga'],
+
+                    # Dados de Data e Hora (Vindos da busca de consolidados)
+                    'data_emissao': c.get('data_emissao'),
+                    'hora_emissao': c.get('hora_emissao'),
                     
-                    # --- CORREÇÃO: Propagando Local para os filhos ---
+                    # Propagando Local para os filhos
                     'origem_cidade': c.get('origem_cidade'),
                     'origem_uf': c.get('origem_uf'),
                     'destino_cidade': c.get('destino_cidade'),
@@ -516,7 +524,7 @@ class PlanejamentoService:
 
             unificado['volumes'] = total_volumes
             unificado['peso_fisico'] = total_peso_fisico
-            unificado['peso_taxado'] = total_peso_taxado # Esse irá para o MalhaService
+            unificado['peso_taxado'] = total_peso_taxado 
             unificado['valor'] = total_valor
             
             unificado['is_consolidado'] = True
@@ -532,13 +540,6 @@ class PlanejamentoService:
     @staticmethod
     def RegistrarPlanejamento(dados_ctc_principal, lista_consolidados=None, usuario="Sistema", status_inicial='Em Planejamento', 
                               aero_origem=None, aero_destino=None, lista_trechos=None):
-        """
-        Salva o Planejamento.
-        ATUALIZAÇÃO:
-        1. Validação rigorosa de IDs (Cidade, Aeroporto, Voo, Frete).
-        2. Busca de Cidade insensível a acentos e com suporte a 'CIDADE-UF'.
-        3. IndConsolidado = 1 APENAS para o CTC Principal. Itens filhos recebem 0.
-        """
         SessaoPG = ObterSessaoSqlServer()
         if not SessaoPG: 
             LogService.Error("PlanejamentoService", "Falha de conexão com Postgres ao tentar RegistrarPlanejamento.")
@@ -552,16 +553,12 @@ class PlanejamentoService:
                 if not nome: return None
                 nome_busca = str(nome).strip()
                 uf_busca = str(uf).strip()
-
-                # Tratamento para "ITAJAI-SC"
                 if '-' in nome_busca:
                     partes = nome_busca.rsplit('-', 1)
                     if len(partes) == 2 and len(partes[1].strip()) == 2:
                         nome_busca = partes[0].strip()
                         uf_busca = partes[1].strip()
-                
                 if not uf_busca: return None
-
                 try:
                     res = SessaoPG.query(Cidade.Id).join(RemessaCidade, Cidade.IdRemessa == RemessaCidade.Id).filter(
                         RemessaCidade.Ativo == True,
@@ -635,7 +632,15 @@ class PlanejamentoService:
                 Cabecalho.IdAeroportoOrigem = id_aero_orig_cab
                 Cabecalho.AeroportoDestino = aero_destino
                 Cabecalho.IdAeroportoDestino = id_aero_dest_cab
+                
+                # Atualiza totais (Soma)
+                def get_val(key): return float(dados_ctc_principal.get(key, 0) or 0)
+                Cabecalho.TotalVolumes = int(get_val('volumes'))
+                Cabecalho.TotalPeso = get_val('peso_taxado') 
+                Cabecalho.TotalValor = get_val('valor')
+
                 SessaoPG.query(PlanejamentoTrecho).filter(PlanejamentoTrecho.IdPlanejamento == Cabecalho.IdPlanejamento).delete()
+                SessaoPG.query(PlanejamentoItem).filter(PlanejamentoItem.IdPlanejamento == Cabecalho.IdPlanejamento).delete()
             else:
                 def get_val(key): return float(dados_ctc_principal.get(key, 0) or 0)
                 Cabecalho = PlanejamentoCabecalho(
@@ -646,62 +651,64 @@ class PlanejamentoService:
                     IdAeroportoOrigem=id_aero_orig_cab,
                     IdAeroportoDestino=id_aero_dest_cab,
                     TotalVolumes=int(get_val('volumes')),
-                    TotalPeso=get_val('peso'),
-                    TotalValor=get_val('valor')
+                    TotalPeso=get_val('peso_taxado'), 
+                    TotalValor=get_val('valor')       
                 )
                 SessaoPG.add(Cabecalho)
                 SessaoPG.flush()
 
-                # --- PREPARAÇÃO DA LISTA DE DOCUMENTOS (REGRA INDCONSOLIDADO) ---
-                todos_docs = []
-                
-                # 1. CTC PRINCIPAL (Mãe/Pai) -> Recebe IndConsolidado = True (se houver consolidação)
-                # Se não tiver filhos, ele entra como False (item normal), ou True se veio marcado.
-                # Como a regra é "só o principal é 1", garantimos isso aqui:
-                eh_consolidado_principal = dados_ctc_principal.get('is_consolidado', False)
-                dados_ctc_principal['IndConsolidado'] = eh_consolidado_principal
+            # --- PREPARAÇÃO DA LISTA DE DOCUMENTOS ---
+            todos_docs = []
+            if dados_ctc_principal.get('lista_docs'):
+                todos_docs = dados_ctc_principal['lista_docs']
+                eh_consolidado = dados_ctc_principal.get('is_consolidado', False)
+                for idx, doc in enumerate(todos_docs):
+                    doc['IndConsolidado'] = eh_consolidado if idx == 0 else False
+            else:
+                dados_ctc_principal['IndConsolidado'] = False
                 todos_docs.append(dados_ctc_principal)
 
-                # 2. CTCs FILHOS (Anexados) -> Recebem IndConsolidado = False (0)
-                if lista_consolidados:
-                    for c in lista_consolidados:
-                        c['IndConsolidado'] = False  # <--- CORREÇÃO AQUI: Força 0 para os filhos
-                        todos_docs.append(c)
+            # Salva os Itens (Cada CTC com sua Data/Hora/Peso Individuais)
+            for doc in todos_docs:
+                cidade_orig = str(doc.get('origem_cidade', ''))
+                uf_orig = str(doc.get('origem_uf') or doc.get('uf_orig', ''))
+                cidade_dest = str(doc.get('destino_cidade', ''))
+                uf_dest = str(doc.get('destino_uf') or doc.get('uf_dest', ''))
                 
-                # Salva os Itens
-                for doc in todos_docs:
-                    cidade_orig = str(doc.get('origem_cidade', ''))
-                    uf_orig = str(doc.get('origem_uf') or doc.get('uf_orig', ''))
-                    cidade_dest = str(doc.get('destino_cidade', ''))
-                    uf_dest = str(doc.get('destino_uf') or doc.get('uf_dest', ''))
-                    
-                    data_emissao = doc.get('data_emissao_real') or doc.get('data_emissao')
-                    hora_emissao = doc.get('hora_formatada') or doc.get('hora_emissao')
+                # --- AQUI: Extraindo Data/Hora de CADA doc individualmente ---
+                data_doc = doc.get('data_emissao_real') 
+                if not data_doc: 
+                    data_doc = doc.get('data_emissao')
 
-                    id_cid_orig = buscar_id_cidade(cidade_orig, uf_orig)
-                    id_cid_dest = buscar_id_cidade(cidade_dest, uf_dest)
+                hora_doc = doc.get('hora_formatada')
+                if not hora_doc:
+                    hora_doc = doc.get('hora_emissao')
+                # -------------------------------------------------------------
 
-                    if not id_cid_orig: raise Exception(f"Cidade Origem '{cidade_orig}-{uf_orig}' não encontrada/inativa para CTC {doc.get('ctc')}")
-                    if not id_cid_dest: raise Exception(f"Cidade Destino '{cidade_dest}-{uf_dest}' não encontrada/inativa para CTC {doc.get('ctc')}")
+                id_cid_orig = buscar_id_cidade(cidade_orig, uf_orig)
+                id_cid_dest = buscar_id_cidade(cidade_dest, uf_dest)
 
-                    SessaoPG.add(PlanejamentoItem(
-                        IdPlanejamento=Cabecalho.IdPlanejamento,
-                        Filial=str(doc['filial']),
-                        Serie=str(doc['serie']),
-                        Ctc=str(doc['ctc']),
-                        DataEmissao=data_emissao,
-                        Hora=hora_emissao,
-                        Remetente=str(doc.get('remetente',''))[:100],
-                        Destinatario=str(doc.get('destinatario',''))[:100],
-                        OrigemCidade=cidade_orig[:50],
-                        DestinoCidade=cidade_dest[:50],
-                        IdCidadeOrigem=id_cid_orig,
-                        IdCidadeDestino=id_cid_dest,
-                        Volumes=int(doc.get('volumes', 0)),
-                        PesoTaxado=float(doc.get('peso', 0) or doc.get('peso_taxado', 0)),
-                        ValMercadoria=float(doc.get('valor', 0) or doc.get('val_mercadoria', 0)),
-                        IndConsolidado=doc.get('IndConsolidado', False) # Agora está correto (Pai=1, Filho=0)
-                    ))
+                if not id_cid_orig: raise Exception(f"Cidade Origem '{cidade_orig}-{uf_orig}' não encontrada/inativa para CTC {doc.get('ctc')}")
+                if not id_cid_dest: raise Exception(f"Cidade Destino '{cidade_dest}-{uf_dest}' não encontrada/inativa para CTC {doc.get('ctc')}")
+
+                SessaoPG.add(PlanejamentoItem(
+                    IdPlanejamento=Cabecalho.IdPlanejamento,
+                    Filial=str(doc['filial']),
+                    Serie=str(doc['serie']),
+                    Ctc=str(doc['ctc']),
+                    DataEmissao=data_doc,   # Data específica deste CTC
+                    Hora=str(hora_doc),     # Hora específica deste CTC
+                    Remetente=str(doc.get('remetente',''))[:100],
+                    Destinatario=str(doc.get('destinatario',''))[:100],
+                    OrigemCidade=cidade_orig[:50],
+                    DestinoCidade=cidade_dest[:50],
+                    IdCidadeOrigem=id_cid_orig,
+                    IdCidadeDestino=id_cid_dest,
+                    Volumes=int(doc.get('volumes', 0)),
+                    PesoTaxado=float(doc.get('peso_taxado', 0) or doc.get('peso', 0)), 
+                    ValMercadoria=float(doc.get('valor', 0) or doc.get('val_mercadoria', 0)),
+                    IndConsolidado=doc.get('IndConsolidado', False)
+                ))
 
             # 2. GRAVA OS TRECHOS
             if lista_trechos and len(lista_trechos) > 0:

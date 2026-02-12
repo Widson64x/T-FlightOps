@@ -276,6 +276,7 @@
     .badge-rapida { background: var(--cor-info); }
     .badge-barata { background: var(--cor-aviso); }
     .badge-conexoes { background: #8B5CF6; }
+    .badge-direta { background: var(--cor-sucesso); } /* Verde também */
 
     .card-info {
         display: flex; 
@@ -493,11 +494,15 @@
         const lista = document.getElementById('lista-opcoes');
         lista.innerHTML = '';
         
+        // --- AQUI ESTAVA O PROBLEMA: As chaves não batiam com o Backend ---
+        // Atualizado para bater com RouteIntelligenceService.py
         const configs = {
             'recomendada': { label: 'Recomendada', class: 'badge-recomendada', icon: 'ph-star' },
-            'mais_rapida': { label: 'Mais Rápida', class: 'badge-rapida', icon: 'ph-timer' },
-            'menor_custo': { label: 'Menor Custo', class: 'badge-barata', icon: 'ph-currency-dollar' },
-            'menos_conexoes': { label: 'Menos Conexões', class: 'badge-conexoes', icon: 'ph-arrows-left-right' }
+            'direta': { label: 'Voo Direto', class: 'badge-direta', icon: 'ph-airplane-tilt' },
+            'rapida': { label: 'Mais Rápida', class: 'badge-rapida', icon: 'ph-timer' },
+            'economica': { label: 'Mais Econômica', class: 'badge-barata', icon: 'ph-currency-dollar' },
+            'conexao_mesma_cia': { label: 'Mesma Cia', class: 'badge-conexoes', icon: 'ph-arrows-left-right' },
+            'interline': { label: 'Interline', class: 'badge-conexoes', icon: 'ph-shuffle' }
         };
 
         Object.keys(configs).forEach(chave => {

@@ -47,8 +47,8 @@ def ApiOtimizarRotas():
         opcoes = MalhaService.BuscarOpcoesDeRotas(
             data_inicio=dt_inicio,
             data_fim=dt_fim,
-            origem_iata=origem,
-            destino_iata=destino,
+            lista_origens=origem,   # Antes era origem_iata
+            lista_destinos=destino, # Antes era destino_iata
             peso_total=peso
         )
 

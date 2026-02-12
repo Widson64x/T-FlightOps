@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from datetime import datetime
-from sqlalchemy import desc
+from sqlalchemy import desc, func, text
 from Conexoes import ObterSessaoSqlServer
 from Models.SQL_SERVER.TabelaFrete import RemessaFrete, TabelaFrete
 from Configuracoes import ConfiguracaoBase
@@ -9,6 +9,9 @@ from Services.LogService import LogService
 
 class TabelaFreteService:
     DIR_TEMP = ConfiguracaoBase.DIR_TEMP
+    
+    # Penalidade mantida apenas como referência, não retornada visualmente
+    PENALIDADE_TARIFA_MISSING = 15000.0
 
     @staticmethod
     def _GarantirDiretorio():
@@ -20,15 +23,10 @@ class TabelaFreteService:
 
     @staticmethod
     def _NormalizarTarifa(val):
-        """
-        Retorna float se válido, ou None se vazio/inválido.
-        """
         if pd.isna(val): return None
         s = str(val).strip().upper()
         if s in ['', '-', 'NAN', 'NONE', 'N/A']: return None
-        
         try:
-            # Remove R$, espaços e converte vírgula
             clean_val = s.replace('R$', '').replace(' ', '').replace(',', '.')
             return float(clean_val)
         except:
@@ -36,22 +34,11 @@ class TabelaFreteService:
 
     @staticmethod
     def _NormalizarNomeCia(cia_input):
-        """
-        Converte códigos IATA/ICAO ou nomes longos para o padrão da Tabela de Frete.
-        Padrão esperado no Banco: GOL, LATAM, AZUL.
-        """
         if not cia_input: return ""
         s = str(cia_input).upper().strip()
-        
-        # Mapeamento GOL
-        if 'GOL' in s or 'G3' in s or 'GLO' in s: return 'GOL'
-        
-        # Mapeamento LATAM
         if 'LATAM' in s or 'TAM' in s or 'JJ' in s or 'LA' in s: return 'LATAM'
-        
-        # Mapeamento AZUL
+        if 'GOL' in s or 'G3' in s or 'GLO' in s: return 'GOL'
         if 'AZUL' in s or 'AD' in s or 'AZU' in s: return 'AZUL'
-        
         return s
 
     @staticmethod
@@ -89,31 +76,11 @@ class TabelaFreteService:
             LogService.Info("TabelaFreteService", f"Analisando arquivo: {arquivo.filename}")
             
             DfRaw = None
-            
-            # --- BLOCO DE LEITURA BLINDADO (Context Manager) ---
             with pd.ExcelFile(Caminho, engine='openpyxl') as XlsFile:
-                
-                # 1. Identificar a aba correta
-                SheetName = None
-                for sheet in XlsFile.sheet_names:
-                    if 'TARIF' in sheet.upper(): 
-                        SheetName = sheet
-                        break
-                
-                if not SheetName:
-                    SheetName = XlsFile.sheet_names[0]
-                    LogService.Warning("TabelaFreteService", f"Aba 'TARIFÁRIO' não encontrada. Usando: {SheetName}")
-                else:
-                    LogService.Info("TabelaFreteService", f"Processando aba: {SheetName}")
-
-                # 2. Ler os dados
+                SheetName = next((s for s in XlsFile.sheet_names if 'TARIF' in s.upper()), XlsFile.sheet_names[0])
                 DfRaw = pd.read_excel(XlsFile, sheet_name=SheetName, header=None)
 
-            # 3. Localizar Cabeçalho
-            RowHeaderIdx = -1
-            ColOrigemIdx = -1
-            ColDestinoIdx = -1
-            
+            RowHeaderIdx, ColOrigemIdx, ColDestinoIdx = -1, -1, -1
             for i in range(min(15, len(DfRaw))):
                 RowVals = [str(x).strip().upper() for x in DfRaw.iloc[i].values]
                 if 'ORIGEM' in RowVals and 'DESTINO' in RowVals:
@@ -123,29 +90,18 @@ class TabelaFreteService:
                         elif val == 'DESTINO': ColDestinoIdx = idx
                     break
             
-            if RowHeaderIdx == -1:
-                return False, "Estrutura inválida. Colunas Origem/Destino não encontradas."
-
-            # 4. Mapear Serviços
-            if RowHeaderIdx == 0:
-                return False, "Arquivo sem linha de títulos de serviços."
+            if RowHeaderIdx == -1: return False, "Colunas Origem/Destino não encontradas."
 
             MapServicos = {}
             RowServicosIdx = RowHeaderIdx - 1
-            
             for col in range(len(DfRaw.columns)):
                 if col in [ColOrigemIdx, ColDestinoIdx]: continue
-                
                 NomeServico = str(DfRaw.iloc[RowServicosIdx, col]).strip()
-                
-                if NomeServico and NomeServico.upper() not in ['NAN', 'NONE', '', 'N/A']:
-                    if " X " in NomeServico.upper(): continue
+                if NomeServico and NomeServico.upper() not in ['NAN', 'NONE', '', 'N/A'] and " X " not in NomeServico.upper():
                     MapServicos[col] = NomeServico
 
-            if not MapServicos:
-                return False, "Nenhum serviço identificado."
+            if not MapServicos: return False, "Nenhum serviço identificado."
 
-            # 5. Persistir Dados
             NovaRemessa = RemessaFrete(
                 DataReferencia=datetime.now().date(),
                 NomeArquivoOriginal=arquivo.filename,
@@ -156,99 +112,124 @@ class TabelaFreteService:
             Sessao.flush()
 
             ListaInsert = []
-            
             for i in range(RowHeaderIdx + 1, len(DfRaw)):
                 Row = DfRaw.iloc[i]
+                RowOrigem = str(Row[ColOrigemIdx]).strip().upper()
+                RowDestino = str(Row[ColDestinoIdx]).strip().upper()
                 
-                RawOrigem = str(Row[ColOrigemIdx]).strip().upper()
-                RawDestino = str(Row[ColDestinoIdx]).strip().upper()
+                if RowOrigem in ['', 'NAN'] or RowDestino in ['', 'NAN']: continue
                 
-                if RawOrigem in ['', 'NAN', 'NONE'] or RawDestino in ['', 'NAN', 'NONE']: continue
-                
-                Origens = [o.strip() for o in RawOrigem.split('/')]
-                
+                Origens = [o.strip() for o in RowOrigem.split('/')]
                 for Origem in Origens:
                     for ColIdx, NomeServico in MapServicos.items():
-                        ValorRaw = Row[ColIdx]
-                        ValorTarifa = TabelaFreteService._NormalizarTarifa(ValorRaw)
-                        
-                        # Normaliza Cia aqui também para garantir consistência
-                        CiaBruta = NomeServico.split(' ')[0].upper()
-                        CiaNormalizada = TabelaFreteService._NormalizarNomeCia(CiaBruta)
+                        ValorTarifa = TabelaFreteService._NormalizarTarifa(Row[ColIdx])
+                        if ValorTarifa is not None:
+                            CiaBruta = NomeServico.split(' ')[0].upper()
+                            CiaNormalizada = TabelaFreteService._NormalizarNomeCia(CiaBruta)
 
-                        Item = TabelaFrete(
-                            IdRemessa=NovaRemessa.Id,
-                            Origem=Origem,
-                            Destino=RawDestino,
-                            CiaAerea=CiaNormalizada, # Salva já normalizado (GOL, LATAM)
-                            Servico=NomeServico,
-                            Tarifa=ValorTarifa
-                        )
-                        ListaInsert.append(Item)
+                            ListaInsert.append(TabelaFrete(
+                                IdRemessa=NovaRemessa.Id,
+                                Origem=Origem,
+                                Destino=RowDestino,
+                                CiaAerea=CiaNormalizada, 
+                                Servico=NomeServico,
+                                Tarifa=ValorTarifa
+                            ))
 
-            if ListaInsert:
-                Sessao.bulk_save_objects(ListaInsert)
-                Sessao.commit()
-                Msg = f"Sucesso! {len(ListaInsert)} linhas de tarifa importadas."
-                LogService.Info("TabelaFreteService", Msg)
-                return True, Msg
-            else:
-                return False, "Arquivo processado mas nenhum dado encontrado."
+            Sessao.bulk_save_objects(ListaInsert)
+            Sessao.commit()
+            return True, f"Sucesso! {len(ListaInsert)} tarifas importadas."
 
         except Exception as e:
             Sessao.rollback()
-            LogService.Error("TabelaFreteService", "Erro fatal no processamento", e)
+            LogService.Error("TabelaFreteService", "Erro processamento", e)
             return False, f"Erro técnico: {str(e)}"
-        
         finally:
-            if os.path.exists(Caminho):
-                try: os.remove(Caminho)
-                except: pass
+            if os.path.exists(Caminho): os.remove(Caminho)
             Sessao.close()
             
     @staticmethod
     def CalcularCustoEstimado(origem, destino, cia, peso):
         """
-        Busca a tarifa na tabela e calcula o custo total.
-        Retorna (CustoTotal, Detalhes).
+        Estratégia Tripla com Tratamento de NULL (Penalidade Virtual)
         """
         Sessao = ObterSessaoSqlServer()
         try:
-            # 1. Normaliza o nome da Cia para bater com o banco (ex: G3 -> GOL)
-            cia_buscada = TabelaFreteService._NormalizarNomeCia(cia)
+            cia_normalizada = TabelaFreteService._NormalizarNomeCia(cia)
+            origem = origem.strip().upper()
+            destino = destino.strip().upper()
 
-            # 2. Busca Tarifa (Ordenando pela MENOR tarifa para pegar o melhor preço)
-            # Usa .join(RemessaFrete) para garantir que só pega de tabelas ativas
-            Item = Sessao.query(TabelaFrete).join(RemessaFrete).filter(
+            # --- ESTRATEGIA 1: ORM Match Exato (Ignorando NULLs) ---
+            QueryBase = Sessao.query(TabelaFrete).join(RemessaFrete).filter(
                 RemessaFrete.Ativo == True,
-                TabelaFrete.Origem == origem,
-                TabelaFrete.Destino == destino,
-                TabelaFrete.CiaAerea == cia_buscada
-            ).order_by(TabelaFrete.Tarifa.asc()).first() # <--- O PULO DO GATO: Pega a mais barata
+                func.upper(func.trim(TabelaFrete.Origem)) == origem,
+                func.upper(func.trim(TabelaFrete.Destino)) == destino,
+                TabelaFrete.Tarifa != None 
+            )
 
-            if Item and Item.Tarifa:
+            Item = QueryBase.filter(TabelaFrete.CiaAerea.like(f"%{cia_normalizada}%")).order_by(TabelaFrete.Tarifa.asc()).first()
+            
+            # --- ESTRATEGIA 2: Fallback ORM (Qualquer Cia Válida) ---
+            if not Item:
+                Item = QueryBase.order_by(TabelaFrete.Tarifa.asc()).first()
+                if Item:
+                    LogService.Warning("TarifaFallback", f"ORM: Usando tarifa de {Item.CiaAerea} para {origem}->{destino}")
+
+            # Retorno ORM
+            if Item and Item.Tarifa is not None:
                 vl_tarifa = float(Item.Tarifa)
-                vl_peso = float(peso)
-                Custo = vl_tarifa * vl_peso
-                
-                Detalhes = {
+                return vl_tarifa * float(peso), {
                     'tarifa_base': vl_tarifa,
                     'servico': Item.Servico,
                     'cia_tarifaria': Item.CiaAerea,
-                    'peso_calculado': vl_peso
+                    'peso_calculado': float(peso),
+                    'tarifa_missing': False 
                 }
-                
-                # Debug para confirmar no terminal
-                LogService.Debug("TarifaFound", f"{origem}->{destino} ({cia_buscada}): R$ {vl_tarifa} [{Item.Servico}]")
-                
-                return Custo, Detalhes
             
-            # Se não achar
-            LogService.Debug("TarifaMiss", f"Nenhuma tarifa ativa para {origem}->{destino} ({cia_buscada})")
-            return 0.0, {}
+            # --- ESTRATEGIA 3: HARDCORE SQL (Fallback Final) ---
+            LogService.Warning("TarifaMiss", f"ORM falhou para {origem}->{destino}. Tentando SQL Direto...")
+            
+            sql_raw = text("""
+                SELECT TOP 1 F.Tarifa, F.Servico, F.CiaAerea
+                FROM intec.dbo.Tb_PLN_Frete F
+                INNER JOIN intec.dbo.Tb_PLN_RemessaFrete RF ON F.IdRemessa = RF.Id
+                WHERE RF.Ativo = 1 
+                  AND RTRIM(LTRIM(F.Origem)) = :origem 
+                  AND RTRIM(LTRIM(F.Destino)) = :destino
+                -- Ordena: Preços válidos primeiro, NULL por último
+                ORDER BY CASE WHEN F.Tarifa IS NULL THEN 1 ELSE 0 END, F.Tarifa ASC
+            """)
+            
+            result = Sessao.execute(sql_raw, {'origem': origem, 'destino': destino}).first()
+            
+            if result:
+                # TRATAMENTO DE NULL
+                if result.Tarifa is None:
+                    LogService.Warning("TarifaNull", f"Tarifa NULL (Bloqueada) para {origem}->{destino}. Aplicando Penalidade Virtual.")
+                    # RETORNA CUSTO ZERO PARA O USUÁRIO, MAS FLAG TRUE PARA O SCORE
+                    return 0.0, {
+                        'tarifa_base': 0.0,
+                        'servico': result.Servico,
+                        'cia_tarifaria': result.CiaAerea,
+                        'peso_calculado': float(peso),
+                        'tarifa_missing': True
+                    }
+                else:
+                    vl_tarifa = float(result.Tarifa)
+                    return vl_tarifa * float(peso), {
+                        'tarifa_base': vl_tarifa,
+                        'servico': result.Servico,
+                        'cia_tarifaria': result.CiaAerea,
+                        'peso_calculado': float(peso),
+                        'tarifa_missing': False
+                    }
+
+            LogService.Error("TarifaFatal", f"Nenhuma tarifa encontrada para {origem}->{destino}")
+            # Retorna 0.0 e marca missing para penalidade
+            return 0.0, {'tarifa_missing': True}
 
         except Exception as e:
-            LogService.Error("TabelaFreteService", f"Erro calc custo {origem}->{destino}", e)
-            return 0.0, {}
+            LogService.Error("TabelaFreteService", f"Erro crítico calc {origem}->{destino}", e)
+            return 0.0, {'tarifa_missing': True}
         finally:
             Sessao.close()

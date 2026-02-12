@@ -46,18 +46,29 @@
             </div>
         </div>
 
-        <div class="strategy-tabs">
+        <div class="strategy-tabs">     
             <button class="tab-btn active" onclick="SelecionarEstrategia('recomendada')" id="tab-recomendada" title="Melhor Custo-Benefício">
                 <i class="ph-duotone ph-star"></i> <span>Recomendada</span>
             </button>
-            <button class="tab-btn" onclick="SelecionarEstrategia('mais_rapida')" id="tab-mais_rapida" title="Menor Tempo Total">
+            
+            <button class="tab-btn" onclick="SelecionarEstrategia('direta')" id="tab-direta" title="Voo Direto (Sem Escalas)">
+                <i class="ph-duotone ph-paper-plane-right"></i> <span>Direta</span>
+            </button>
+            
+            <button class="tab-btn" onclick="SelecionarEstrategia('rapida')" id="tab-rapida" title="Menor Tempo Total">
                 <i class="ph-duotone ph-lightning"></i> <span>Rápida</span>
             </button>
-            <button class="tab-btn" onclick="SelecionarEstrategia('menor_custo')" id="tab-menor_custo" title="Menor Custo de Frete">
+            
+            <button class="tab-btn" onclick="SelecionarEstrategia('economica')" id="tab-economica" title="Menor Custo de Frete">
                 <i class="ph-duotone ph-coins"></i> <span>Econômica</span>
             </button>
-            <button class="tab-btn" onclick="SelecionarEstrategia('menos_conexoes')" id="tab-menos_conexoes" title="Voo Direto ou Poucas Escalas">
-                <i class="ph-duotone ph-arrows-left-right"></i> <span>Direta</span>
+            
+            <button class="tab-btn" onclick="SelecionarEstrategia('conexao_mesma_cia')" id="tab-conexao_mesma_cia" title="Conexão Mesma Cia">
+                <i class="ph-duotone ph-airplane-tilt"></i> <span>Conexão</span>
+            </button>
+            
+            <button class="tab-btn" onclick="SelecionarEstrategia('interline')" id="tab-interline" title="Múltiplas Cias Aéreas">
+                <i class="ph-duotone ph-shuffle"></i> <span>Interline</span>
             </button>
         </div>
 
@@ -74,7 +85,7 @@
             </div>
         </div>
 
-        <div class="sidebar-footer">
+        <div class="sidebar-editor-footer">
             <a href="{{ url_for('Planejamento.Dashboard') }}" class="btn-cancel">Cancelar</a>
             <button class="btn-confirm" onclick="ConfirmarPlanejamento()" id="btn-confirmar">
                 <i class="ph-bold ph-check-circle"></i> Confirmar Rota

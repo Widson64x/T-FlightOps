@@ -53,33 +53,55 @@ function initMap() {
     routeLayerGroup = L.layerGroup().addTo(map);
 }
 
-// --- 2. Seleção de Estratégia ---
+// --- 2. Seleção de Estratégia (Atualizado para novas chaves) ---
 window.SelecionarEstrategia = function(tipo) {
     currentState.estrategia = tipo;
 
-    // UI Updates
+    // 1. Atualiza UI das Abas
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     const btn = document.getElementById(`tab-${tipo}`);
     if(btn) btn.classList.add('active');
 
+    // 2. Recupera a rota do objeto global injetado pelo backend
+    // As chaves agora são: 'recomendada', 'direta', 'rapida', 'economica', 'conexao_mesma_cia', 'interline'
     const rotas = window.opcoesRotas[tipo];
     currentState.rotaSelecionada = rotas;
 
-    RenderizarRotaNoMapa(rotas);
-    RenderizarTimeline(rotas);
-    AtualizarMetricas(rotas);
+    // 3. Renderização
+    if (rotas && rotas.length > 0) {
+        RenderizarRotaNoMapa(rotas);
+        RenderizarTimeline(rotas);
+        AtualizarMetricas(rotas);
+    } else {
+        // Limpa visual se não houver rota para essa estratégia (ex: Sem voo direto)
+        routeLayerGroup.clearLayers();
+        document.getElementById('timeline-content').innerHTML = `
+            <div class="empty-state">
+                <i class="ph-duotone ph-airplane-slash"></i>
+                <p>Nenhuma rota encontrada para esta categoria.</p>
+            </div>`;
+        AtualizarMetricas(null);
+    }
     
-    // Atualiza botão de salvar
+    // 4. Atualiza estado do botão Salvar
+    AtualizarBotaoSalvar(rotas);
+};
+
+// Função auxiliar para controlar o botão de confirmação
+function AtualizarBotaoSalvar(rotas) {
     const btnSalvar = document.getElementById('btn-confirmar');
     if(!rotas || rotas.length === 0) {
         btnSalvar.disabled = true;
-        btnSalvar.innerHTML = '<i class="ph-bold ph-warning"></i> Sem Rota';
+        btnSalvar.innerHTML = '<i class="ph-bold ph-warning"></i> Indisponível';
+        btnSalvar.style.background = '#9ca3af'; // Cinza disabled
+        btnSalvar.style.cursor = 'not-allowed';
     } else {
         btnSalvar.disabled = false;
         btnSalvar.innerHTML = '<i class="ph-bold ph-check-circle"></i> Confirmar Rota';
+        btnSalvar.style.background = ''; // Volta ao CSS original (verde/azul)
+        btnSalvar.style.cursor = 'pointer';
     }
-};
-
+}
 // --- 3. Renderização Visual (Mapa Rico) ---
 
 function RenderizarRotaNoMapa(listaTrechos) {
@@ -158,25 +180,46 @@ function RenderizarRotaNoMapa(listaTrechos) {
 
         // Popup Rico
         const popupContent = `
-            <div class="popup-flight-info">
-                <div class="popup-header">
-                    <img src="/Luft-ConnectAir/Static/Img/Logos/${ciaInfo.icon}" style="height: 20px;" onerror="this.style.display='none'">
-                    <div>
-                        <div style="font-weight:bold; font-size:0.9rem;">${trecho.cia}</div>
-                        <div style="font-size:0.75rem;">Voo ${trecho.voo}</div>
+            <div class="flight-popup-card">
+                <div class="popup-header" style="border-left: 4px solid ${ciaInfo.color}">
+                    <div class="cia-info">
+                        <img src="/Luft-ConnectAir/Static/Img/Logos/${ciaInfo.icon}" class="popup-cia-logo" onerror="this.style.display='none'">
+                        <div class="cia-texts">
+                            <span class="cia-name">${trecho.cia}</span>
+                            <span class="flight-number">Voo ${trecho.voo}</span>
+                        </div>
                     </div>
+                    <div class="popup-date">${trecho.data.substring(0,5)}</div>
                 </div>
+                
                 <div class="popup-body">
-                    <div class="popup-route">
-                        <span>${trecho.origem.iata}</span> <i class="ph-bold ph-arrow-right"></i> <span>${trecho.destino.iata}</span>
+                    <div class="popup-route-row">
+                        <div class="node">
+                            <span class="iata">${trecho.origem.iata}</span>
+                            <span class="time">${trecho.horario_saida}</span>
+                        </div>
+                        <div class="route-line">
+                            <i class="ph-fill ph-airplane"></i>
+                        </div>
+                        <div class="node">
+                            <span class="iata">${trecho.destino.iata}</span>
+                            <span class="time">${trecho.horario_chegada}</span>
+                        </div>
                     </div>
-                    <div class="popup-meta">
-                        <span><i class="ph-bold ph-clock"></i> ${trecho.horario_saida} - ${trecho.horario_chegada}</span>
-                    </div>
-                    <div class="popup-details">
-                        <div class="detail-row"><strong>Serviço:</strong> <span>${servico}</span></div>
-                        <div class="detail-row"><strong>Tarifa:</strong> <span>${formatMoney(tarifa)}/kg</span></div>
-                        <div class="detail-row total"><strong>Custo Trecho:</strong> <span>${custoTrechoFmt}</span></div>
+
+                    <div class="popup-finance-grid">
+                        <div class="fin-item">
+                            <span class="label">Serviço</span>
+                            <span class="value">${servico}</span>
+                        </div>
+                        <div class="fin-item">
+                            <span class="label">Tarifa/kg</span>
+                            <span class="value">${formatMoney(tarifa)}</span>
+                        </div>
+                        <div class="fin-item total">
+                            <span class="label">Total Trecho</span>
+                            <span class="value">${custoTrechoFmt}</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -277,14 +320,17 @@ function RenderizarTimeline(listaTrechos) {
                 <div class="flight-footer">
                     <div class="info-badge">
                         <span class="label">Serviço</span>
+                        <br>
                         <span class="value">${servico}</span>
                     </div>
                     <div class="info-badge">
                         <span class="label">Tarifa</span>
+                        <br>
                         <span class="value">${formatMoney(tarifa)}</span>
                     </div>
                     <div class="info-badge cost">
                         <span class="label">Custo</span>
+                        <br>
                         <span class="value">${custoTrechoFmt}</span>
                     </div>
                 </div>
@@ -294,25 +340,34 @@ function RenderizarTimeline(listaTrechos) {
     container.innerHTML = html;
 }
 
-// --- 5. Atualização das Métricas ---
+// --- 5. Atualização das Métricas (Refinada) ---
 function AtualizarMetricas(listaTrechos) {
     const container = document.getElementById('strategy-metrics');
+    const els = container.children; // [0]=Custo, [1]=Tempo, [2]=Conexões
+    
     if(!listaTrechos || listaTrechos.length === 0) {
         container.style.opacity = '0.5';
+        els[0].querySelector('.val').innerText = '--';
+        els[1].querySelector('.val').innerText = '--';
+        els[2].querySelector('.val').innerText = '--';
         return;
     }
     
     const resumo = listaTrechos[0]; 
-    const els = container.children;
     
-    // Custo Total: usa o valor formatado vindo do backend
-    els[0].querySelector('.val').innerText = resumo.total_custo_fmt || resumo.total_custo || '--'; 
+    // Custo Total
+    els[0].querySelector('.val').innerText = resumo.total_custo_fmt || formatMoney(resumo.total_custo_raw); 
     
     // Tempo Total
     els[1].querySelector('.val').innerText = resumo.total_duracao || '--:--';
     
-    // Quantidade de Escalas
-    els[2].querySelector('.val').innerText = (listaTrechos.length - 1) + (listaTrechos.length > 1 ? ' escalas' : ' escala');
+    // Quantidade de Escalas (Qtd Trechos - 1)
+    const qtdEscalas = listaTrechos.length - 1;
+    let textoEscalas = "Direto";
+    if (qtdEscalas === 1) textoEscalas = "1 Conexão";
+    if (qtdEscalas > 1) textoEscalas = `${qtdEscalas} Conexões`;
+    
+    els[2].querySelector('.val').innerText = textoEscalas;
     
     container.style.opacity = '1';
 }

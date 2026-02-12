@@ -1,22 +1,27 @@
-from sqlalchemy import distinct
+from sqlalchemy import distinct, desc
 from Conexoes import ObterSessaoSqlServer
 from Models.SQL_SERVER.Cidade import Cidade, RemessaCidade
 from Models.SQL_SERVER.Aeroporto import Aeroporto, RemessaAeroportos
-from Models.SQL_SERVER.MalhaAerea import VooMalha, RemessaMalha 
+from Models.SQL_SERVER.MalhaAerea import VooMalha, RemessaMalha
+# Importação da Model de Ranking (Planejamento)
+from Models.SQL_SERVER.Planejamento import RankingAeroportos 
 from Utils.Geometria import Haversine
 from Utils.Texto import NormalizarTexto
 from Services.LogService import LogService
+
+# Configuração de Inteligência
+# Quanto maior este número, mais o sistema ignora a distância para priorizar o Ranking.
+# Ex: 3.5 significa que 1 ponto de ranking equivale a percorrer 3.5km a mais para chegar lá.
+FATOR_RANKING_KM = 3.5 
 
 def BuscarCoordenadasCidade(NomeCidade, Uf):
     Sessao = ObterSessaoSqlServer()
     try:
         if not NomeCidade or not Uf: return None
         
-        # Normalização para evitar erros de acento (Itajaí vs Itajai)
         NomeBusca = NormalizarTexto(NomeCidade)
         UfBusca = NormalizarTexto(Uf)
         
-        # Buscar todas as cidades do estado (Com JOIN para evitar produto cartesiano e erros)
         CidadesDoEstado = Sessao.query(Cidade)\
             .join(RemessaCidade)\
             .filter(RemessaCidade.Ativo == True) \
@@ -38,73 +43,106 @@ def BuscarCoordenadasCidade(NomeCidade, Uf):
     finally:
         Sessao.close()
 
-def BuscarAeroportoMaisProximo(Lat, Lon):
+def BuscarAeroportoEstrategico(Latitude, Longitude, UfAlvo):
     """
-    Busca o aeroporto mais próximo que TENHA VOOS NA MALHA ATIVA.
+    Busca o melhor aeroporto baseando-se na Estratégia da Empresa (Ranking) 
+    restrito à UF do cliente.
     """
     Sessao = ObterSessaoSqlServer()
     try:
-        # 1. Lista de aeroportos que realmente operam (têm voos saindo) NA MALHA ATIVA
-        AeroportosAtivos = Sessao.query(distinct(VooMalha.AeroportoOrigem))\
-            .join(RemessaMalha)\
-            .filter(RemessaMalha.Ativo == True)\
-            .all()
-            
-        ListaIatasAtivos = [a[0] for a in AeroportosAtivos]
+        # 1. Normalização da UF para garantir o filtro
+        UfFiltro = UfAlvo.upper().strip()
 
-        if not ListaIatasAtivos:
-            # Se não tem malha ativa, não retorna nenhum aeroporto como "ativo"
-            return None
+        # 2. Busca aeroportos que estão no Ranking E que estão ativos na RemessaAeroportos
+        # O filtro RankingAeroportos.Uf garante a restrição estadual solicitada.
+        # CORREÇÃO: Ajuste no JOIN de RemessaAeroportos (Aeroporto.IdRemessa == RemessaAeroportos.Id)
+        CandidatosEstrategicos = Sessao.query(
+            RankingAeroportos.IndiceImportancia,
+            Aeroporto.CodigoIata,
+            Aeroporto.NomeAeroporto,
+            Aeroporto.Latitude,
+            Aeroporto.Longitude
+        ).join(Aeroporto, RankingAeroportos.IdAeroporto == Aeroporto.Id)\
+         .join(RemessaAeroportos, Aeroporto.IdRemessa == RemessaAeroportos.Id)\
+         .filter(RankingAeroportos.Uf == UfFiltro)\
+         .filter(RemessaAeroportos.Ativo == True)\
+         .all()
+
+        MelhorOpcao = None
+        MenorScore = float('inf') # Quanto menor o score, melhor (Score = Custo/Esforço)
+
+        # Lista para log de decisão (Debug)
+        LogDecisao = []
+
+        if CandidatosEstrategicos:
+            # CENÁRIO A: Temos aeroportos rankeados nesta UF. Vamos competir Distância vs Ranking.
+            for Cand in CandidatosEstrategicos:
+                DistanciaReal = Haversine(Latitude, Longitude, float(Cand.Latitude), float(Cand.Longitude))
+                
+                # FÓRMULA DE DECISÃO:
+                # O Ranking atua como um "redutor de distância percebida".
+                # Se o aeroporto é muito importante (Indice 100), ele "abate" 350km (100 * 3.5) do custo.
+                BonusRanking = Cand.IndiceImportancia * FATOR_RANKING_KM
+                ScoreCalculado = DistanciaReal - BonusRanking
+
+                LogDecisao.append(f"{Cand.CodigoIata}: Dist={DistanciaReal:.1f}km, Rank={Cand.IndiceImportancia}, Score={ScoreCalculado:.1f}")
+
+                if ScoreCalculado < MenorScore:
+                    MenorScore = ScoreCalculado
+                    MelhorOpcao = {
+                        'iata': Cand.CodigoIata,
+                        'nome': Cand.NomeAeroporto,
+                        'lat': float(Cand.Latitude),
+                        'lon': float(Cand.Longitude),
+                        'distancia_km': round(DistanciaReal, 1),
+                        'ranking': Cand.IndiceImportancia,
+                        'metodo': 'Estrategico (Ranking)'
+                    }
+            
+            LogService.Debug("GeoService", f"Analise Estrategica UF {UfFiltro}: { ' | '.join(LogDecisao) }")
+
         else:
-            # Busca dados geográficos apenas dos aeroportos ativos
-            TodosAeroportos = Sessao.query(
-                Aeroporto.CodigoIata, 
-                Aeroporto.Latitude, 
-                Aeroporto.Longitude, 
-                Aeroporto.NomeAeroporto
-            ).join(RemessaAeroportos)\
-            .filter(RemessaAeroportos.Ativo == True)\
-            .filter(
-                Aeroporto.Latitude != None,
-                Aeroporto.CodigoIata.in_(ListaIatasAtivos)
-            ).all()
-        
-        MenorDistancia = float('inf')
-        AeroportoEscolhido = None
-        
-        for Aero in TodosAeroportos:
-            Dist = Haversine(Lat, Lon, float(Aero.Latitude), float(Aero.Longitude))
+            # CENÁRIO B: A UF não tem aeroportos na tabela de Ranking (ou nenhum ativo).
+            # Fallback: Busca o mais próximo geograficamente DENTRO DA UF, sem ponderar ranking.
+            LogService.Info("GeoService", f"Nenhum aeroporto rankeado em {UfFiltro}. Usando proximidade simples.")
             
-            if Dist < MenorDistancia:
-                MenorDistancia = Dist
-                AeroportoEscolhido = {
-                    'iata': Aero.CodigoIata,
-                    'nome': Aero.NomeAeroporto,
-                    'lat': float(Aero.Latitude),
-                    'lon': float(Aero.Longitude),
-                    'distancia_km': round(Dist, 1)
-                }
-        
-        if AeroportoEscolhido:
-            LogService.Debug("GeoService", f"Aeroporto mais próximo: {AeroportoEscolhido['iata']} ({AeroportoEscolhido['distancia_km']}km)")
+            AeroportosDaUf = Sessao.query(Aeroporto)\
+                .join(RemessaAeroportos, Aeroporto.IdRemessa == RemessaAeroportos.Id)\
+                .filter(RemessaAeroportos.Ativo == True)\
+                .filter(Aeroporto.Uf == UfFiltro)\
+                .all()
             
-        return AeroportoEscolhido
+            MenorDistancia = float('inf')
+            
+            for Aero in AeroportosDaUf:
+                Dist = Haversine(Latitude, Longitude, float(Aero.Latitude), float(Aero.Longitude))
+                if Dist < MenorDistancia:
+                    MenorDistancia = Dist
+                    MelhorOpcao = {
+                        'iata': Aero.CodigoIata,
+                        'nome': Aero.NomeAeroporto,
+                        'lat': float(Aero.Latitude),
+                        'lon': float(Aero.Longitude),
+                        'distancia_km': round(Dist, 1),
+                        'ranking': 0,
+                        'metodo': 'Proximidade (Fallback UF)'
+                    }
+
+        return MelhorOpcao
+
     except Exception as e:
-        LogService.Error("GeoService", "Erro ao buscar aeroporto mais próximo", e)
+        LogService.Error("GeoService", f"Erro ao buscar aeroporto estrategico em {UfAlvo}", e)
         return None
     finally:
         Sessao.close()
 
+# Manter métodos auxiliares legados caso outras partes do sistema ainda usem, 
+# mas o Planejamento deve chamar o BuscarAeroportoEstrategico acima.
 def BuscarTopAeroportos(lat_cidade, lon_cidade, limite=2):
-    """
-    Retorna uma lista com os 'limite' aeroportos mais próximos (Ativos).
-    Retorna lista de dicts: [{'iata': 'GRU', 'distancia': 25.5, ...}, ...]
-    """
     Sessao = ObterSessaoSqlServer()
     try:
-        # CORREÇÃO: Faz join com RemessaAeroportos e filtra RemessaAeroportos.Ativo
         aeroportos = Sessao.query(Aeroporto)\
-            .join(RemessaAeroportos)\
+            .join(RemessaAeroportos, Aeroporto.IdRemessa == RemessaAeroportos.Id)\
             .filter(
                 RemessaAeroportos.Ativo == True,
                 Aeroporto.Latitude != None,
@@ -112,11 +150,8 @@ def BuscarTopAeroportos(lat_cidade, lon_cidade, limite=2):
             ).all()
         
         lista_distancias = []
-        
         for aero in aeroportos:
-            # Usa Haversine interno
             dist = Haversine(lat_cidade, lon_cidade, float(aero.Latitude), float(aero.Longitude))
-            
             lista_distancias.append({
                 'iata': aero.CodigoIata,
                 'nome': aero.NomeAeroporto,
@@ -125,10 +160,7 @@ def BuscarTopAeroportos(lat_cidade, lon_cidade, limite=2):
                 'distancia': dist
             })
 
-        # Ordena pela distância (menor para maior)
         lista_distancias.sort(key=lambda x: x['distancia'])
-        
-        # Retorna os Top X (ex: Top 2)
         return lista_distancias[:limite]
 
     except Exception as e:
